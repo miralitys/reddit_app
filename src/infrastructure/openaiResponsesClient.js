@@ -8,7 +8,29 @@ class OpenAIResponseError extends Error {
     this.name = "OpenAIResponseError";
     this.status = options.status ?? 502;
     this.retryable = Boolean(options.retryable);
+    this.upstreamStatus = options.upstreamStatus ?? this.status;
+    this.upstreamCode = options.upstreamCode || "";
+    this.upstreamType = options.upstreamType || "";
+    this.upstreamMessage = options.upstreamMessage || "";
   }
+}
+
+function summarizeUpstreamPayload(payload) {
+  const upstreamError = payload?.error;
+
+  if (!upstreamError || typeof upstreamError !== "object") {
+    return {
+      message: "",
+      code: "",
+      type: "",
+    };
+  }
+
+  return {
+    message: String(upstreamError.message || "").trim(),
+    code: String(upstreamError.code || "").trim(),
+    type: String(upstreamError.type || "").trim(),
+  };
 }
 
 function delay(ms, signal) {
@@ -207,6 +229,7 @@ function createOpenAIResponsesClient({
 
           if (!response.ok) {
             const retryable = response.status === 429 || response.status >= 500;
+            const upstreamSummary = summarizeUpstreamPayload(payload);
 
             logger?.warn("OpenAI response request failed", {
               requestId,
@@ -214,6 +237,9 @@ function createOpenAIResponsesClient({
               status: response.status,
               retryable,
               duration_ms: durationMs,
+              upstream_code: upstreamSummary.code,
+              upstream_type: upstreamSummary.type,
+              upstream_message: upstreamSummary.message,
             });
 
             if (retryable && attempt < attempts) {
@@ -228,6 +254,10 @@ function createOpenAIResponsesClient({
             throw new OpenAIResponseError("OpenAI request failed.", {
               status: response.status,
               retryable,
+              upstreamStatus: response.status,
+              upstreamCode: upstreamSummary.code,
+              upstreamType: upstreamSummary.type,
+              upstreamMessage: upstreamSummary.message,
             });
           }
 

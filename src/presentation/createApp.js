@@ -122,10 +122,42 @@ function getPublicErrorDetails(error) {
       }
     }
 
+    if (error.upstreamStatus === 401) {
+      return {
+        status: 502,
+        code: "openai_invalid_api_key",
+        message: "OpenAI rejected the API key configured on the server.",
+      }
+    }
+
+    if (error.upstreamStatus === 403) {
+      return {
+        status: 502,
+        code: "openai_access_denied",
+        message: "The configured OpenAI project does not have access to this model or request.",
+      }
+    }
+
+    if (error.upstreamStatus === 404) {
+      return {
+        status: 502,
+        code: "openai_model_not_found",
+        message: "The configured OpenAI model or endpoint was not found.",
+      }
+    }
+
+    if (error.upstreamStatus === 429) {
+      return {
+        status: 502,
+        code: "openai_rate_limited",
+        message: "OpenAI rate limited the request or the project is out of quota.",
+      }
+    }
+
     return {
       status: 502,
       code: "upstream_error",
-      message: "The upstream service could not complete the request.",
+      message: error.upstreamMessage || "The upstream service could not complete the request.",
     }
   }
 
