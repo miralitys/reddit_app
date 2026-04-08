@@ -1,0 +1,19 @@
+{
+  "name": "reddit-comentator",
+  "version": "1.0.0",
+  "description": "Web app for generating Reddit comments from a custom prompt via OpenAI.",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
+  }
+}

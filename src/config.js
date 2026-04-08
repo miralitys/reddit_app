@@ -1,0 +1,104 @@
+const fs = require("node:fs")
+const path = require("node:path")
+const dotenv = require("dotenv")
+
+const DEFAULT_ENV_FILE_PATH = path.resolve(__dirname, "..", ".env")
+const DEFAULT_HOST = "127.0.0.1"
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_OPENAI_MODEL = "gpt-5.4";
+const DEFAULT_OPENAI_TIMEOUT_MS = 45000;
+const DEFAULT_OPENAI_RETRY_COUNT = 2;
+const DEFAULT_REQUEST_BODY_LIMIT = "1mb";
+const DEFAULT_MAX_CONCURRENT_GENERATIONS = 2
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000
+const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 12
+const DEFAULT_MAX_POST_TEXT_CHARS = 12000
+
+function readPositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function bootstrapEnv(targetEnv = process.env, envFilePath = DEFAULT_ENV_FILE_PATH) {
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(envFilePath))
+
+    for (const [key, value] of Object.entries(parsed)) {
+      if (targetEnv[key] === undefined || targetEnv[key] === "") {
+        targetEnv[key] = value
+      }
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error
+    }
+  }
+
+  return targetEnv
+}
+
+function resolveLoadConfigOptions(optionsOrEnv) {
+  if (
+    optionsOrEnv &&
+    typeof optionsOrEnv === "object" &&
+    ("env" in optionsOrEnv || "envFilePath" in optionsOrEnv)
+  ) {
+    return {
+      env: optionsOrEnv.env || process.env,
+      envFilePath: optionsOrEnv.envFilePath || DEFAULT_ENV_FILE_PATH,
+    }
+  }
+
+  return {
+    env: optionsOrEnv || process.env,
+    envFilePath: DEFAULT_ENV_FILE_PATH,
+  }
+}
+
+function loadConfig(optionsOrEnv = process.env) {
+  const { env, envFilePath } = resolveLoadConfigOptions(optionsOrEnv)
+
+  bootstrapEnv(env, envFilePath)
+
+  return {
+    host: String(env.HOST || DEFAULT_HOST).trim() || DEFAULT_HOST,
+    port: readPositiveInteger(env.PORT, 3000),
+    appAccessToken: String(env.APP_ACCESS_TOKEN || "").trim(),
+    openAiApiKey: String(env.OPENAI_API_KEY || "").trim(),
+    openAiModel: String(env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL).trim() || DEFAULT_OPENAI_MODEL,
+    openAiBaseUrl:
+      String(env.OPENAI_BASE_URL || DEFAULT_OPENAI_BASE_URL).trim().replace(/\/+$/, "") ||
+      DEFAULT_OPENAI_BASE_URL,
+    openAiTimeoutMs: readPositiveInteger(env.OPENAI_TIMEOUT_MS, DEFAULT_OPENAI_TIMEOUT_MS),
+    openAiRetryCount: readPositiveInteger(
+      env.OPENAI_RETRY_COUNT,
+      DEFAULT_OPENAI_RETRY_COUNT,
+    ),
+    requestBodyLimit:
+      String(env.REQUEST_BODY_LIMIT || DEFAULT_REQUEST_BODY_LIMIT).trim() ||
+      DEFAULT_REQUEST_BODY_LIMIT,
+    maxConcurrentGenerations: readPositiveInteger(
+      env.MAX_CONCURRENT_GENERATIONS,
+      DEFAULT_MAX_CONCURRENT_GENERATIONS,
+    ),
+    maxPostTextChars: readPositiveInteger(
+      env.MAX_POST_TEXT_CHARS,
+      DEFAULT_MAX_POST_TEXT_CHARS,
+    ),
+    rateLimitWindowMs: readPositiveInteger(
+      env.RATE_LIMIT_WINDOW_MS,
+      DEFAULT_RATE_LIMIT_WINDOW_MS,
+    ),
+    rateLimitMaxRequests: readPositiveInteger(
+      env.RATE_LIMIT_MAX_REQUESTS,
+      DEFAULT_RATE_LIMIT_MAX_REQUESTS,
+    ),
+  };
+}
+
+module.exports = {
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_ENV_FILE_PATH,
+  bootstrapEnv,
+  loadConfig,
+};

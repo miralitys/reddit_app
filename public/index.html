@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reddit Commentator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel hero hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Signal-grade Reddit reply engine</p>
+          <h1>Reddit Commentator</h1>
+          <p class="lede">
+            Switch between grounded comment generation and persona-based post rewrites for credit
+            and debt topics, with a server-configured OpenAI model and disclosure-aware promo
+            handling.
+          </p>
+          <div class="hero-badges">
+            <span class="badge">Model via .env</span>
+            <span class="badge">10 personas</span>
+            <span class="badge">Comments and posts</span>
+            <span class="badge">Single or all 10</span>
+            <span class="badge">History on device</span>
+          </div>
+        </div>
+
+        <div class="hero-orbit">
+          <div class="orbit-card">
+            <p class="orbit-label">System State</p>
+            <div class="orbit-grid">
+              <div>
+                <strong>Model</strong>
+                <span>Server configured</span>
+              </div>
+              <div>
+                <strong>Promo</strong>
+                <span>Disclosed only</span>
+              </div>
+              <div>
+                <strong>Voices</strong>
+                <span>10 selectable personas</span>
+              </div>
+              <div>
+                <strong>Output</strong>
+                <span>Comments or SEO posts</span>
+              </div>
+            </div>
+            <p class="orbit-note">
+              Promo mentions stay disclosed and the app keeps the output focused on usable reply
+              variations or persona-shaped post rewrites from the selected persona or the full 10
+              persona roster.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="mode-switch" aria-label="Generation modes">
+        <button type="button" class="mode-tab is-active" data-mode="comments">Комментарии</button>
+        <button type="button" class="mode-tab" data-mode="posts">Посты</button>
+      </section>
+
+      <section class="workspace">
+        <section class="panel form-panel">
+          <div class="section-head">
+            <p id="form-kicker" class="section-kicker">Комментарии</p>
+            <h2 id="form-title">Thread Intake</h2>
+          </div>
+
+          <form id="generator-form" class="form">
+            <input id="content-mode" name="contentMode" type="hidden" value="comments" />
+
+            <div id="comment-fields" class="mode-fields">
+              <label class="field">
+                <span>Reddit post URL</span>
+                <input
+                  id="reddit-url"
+                  name="redditUrl"
+                  type="url"
+                  placeholder="https://www.reddit.com/r/.../comments/..."
+                  autocomplete="off"
+                />
+                <small class="field-note">If you paste a Reddit post URL, the app will pull the title, post text, attached image, and visible text from the image when possible.</small>
+              </label>
+
+              <label class="field">
+                <span>Manual post text</span>
+                <textarea
+                  id="post-text"
+                  name="postText"
+                  rows="12"
+                  placeholder="Paste the Reddit post or comment here if you are not using a Reddit URL..."
+                ></textarea>
+              </label>
+            </div>
+
+            <div id="post-fields" class="mode-fields hidden">
+              <label class="field">
+                <span>Keyword</span>
+                <input
+                  id="target-keyword"
+                  name="targetKeyword"
+                  type="text"
+                  placeholder="Example: how to improve credit score"
+                  autocomplete="off"
+                />
+                <small class="field-note">This is the exact keyword the rewritten post should target naturally.</small>
+              </label>
+
+              <label class="field">
+                <span>Title</span>
+                <input
+                  id="source-title"
+                  name="sourceTitle"
+                  type="text"
+                  placeholder="Paste the original title here..."
+                  autocomplete="off"
+                />
+                <small class="field-note">The title stays unchanged. The app rewrites the body only.</small>
+              </label>
+
+              <label class="field">
+                <span>Original post</span>
+                <textarea
+                  id="source-post"
+                  name="sourcePost"
+                  rows="16"
+                  placeholder="Paste the original post that already ranks in Google..."
+                ></textarea>
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Persona</span>
+              <select id="persona" name="personaId">
+                <option value="alex-moreno" selected>Alex Moreno</option>
+                <option value="marina-volk">Marina Volk</option>
+                <option value="daniel-price">Daniel Price</option>
+                <option value="olga-sokolova">Olga Sokolova</option>
+                <option value="kevin-brooks">Kevin Brooks</option>
+                <option value="sophia-grant">Sophia Grant</option>
+                <option value="eric-nolan">Eric Nolan</option>
+                <option value="natalia-reed">Natalia Reed</option>
+                <option value="michael-turner">Michael Turner</option>
+                <option value="jessica-hall">Jessica Hall</option>
+              </select>
+              <small class="field-note">Each persona has their own built in voice, pace, and usual comment length.</small>
+            </label>
+
+            <label class="field">
+              <span>Access token (optional)</span>
+              <input
+                id="access-token"
+                name="accessToken"
+                type="password"
+                placeholder="Only needed for protected non-loopback access"
+                autocomplete="off"
+              />
+            </label>
+
+            <div class="promo-options">
+            <label class="check-card">
+              <input id="promo-credit-club" name="promoCreditClub" type="checkbox" />
+              <span class="check-copy">
+                <strong>Credit Club</strong>
+                <small>Soft disclosed mention of joincreditclub.com</small>
+              </span>
+            </label>
+
+            <label class="check-card">
+              <input id="promo-credit-booster" name="promoCreditBooster" type="checkbox" />
+              <span class="check-copy">
+                <strong>Credit Booster Ai</strong>
+                <small>Soft disclosed mention of creditbooster.ai</small>
+              </span>
+            </label>
+            </div>
+
+            <div class="actions">
+              <div class="action-buttons">
+                <button id="submit-button" type="submit" value="single">Generate comment</button>
+                <button id="submit-all-button" type="submit" value="all-personas" class="ghost">
+                  Generate all 10 personas
+                </button>
+              </div>
+              <p id="status" class="status" aria-live="polite"></p>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel output output-panel">
+          <div class="section-head">
+            <p id="output-kicker" class="section-kicker">Комментарии</p>
+            <h2 id="output-title">Generated output</h2>
+          </div>
+          <div id="source-context" class="source-context empty">
+            <p>Resolved Reddit post details will appear here when you generate from a Reddit URL.</p>
+          </div>
+          <div id="results" class="results empty">
+            <p>Your Reddit-ready comment or full persona batch will appear here.</p>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel history-panel">
+        <div class="section-head output-head">
+          <div>
+            <p class="section-kicker">Memory Bank</p>
+            <h2>Recent generations</h2>
+          </div>
+          <button id="clear-history-button" type="button" class="ghost" disabled>Clear history</button>
+        </div>
+        <div id="history" class="history empty">
+          <p>Your latest comment and post generations will appear here.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
