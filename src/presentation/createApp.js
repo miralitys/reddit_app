@@ -143,6 +143,7 @@ function createApp({
   publicDir,
   requestBodyLimit = "1mb",
   accessToken = "",
+  allowRemoteAccess = false,
   maxPostTextChars = 12000,
   maxConcurrentGenerations = 2,
   rateLimitWindowMs = 60000,
@@ -181,7 +182,8 @@ function createApp({
       service: "reddit-commentator",
       model,
       ready,
-      localOnly: !accessToken,
+      localOnly: !allowRemoteAccess && !accessToken,
+      remoteAccessEnabled: allowRemoteAccess,
     });
   });
 
@@ -192,7 +194,8 @@ function createApp({
       ok: ready,
       service: "reddit-commentator",
       model,
-      localOnly: !accessToken,
+      localOnly: !allowRemoteAccess && !accessToken,
+      remoteAccessEnabled: allowRemoteAccess,
     })
   })
 
@@ -221,14 +224,14 @@ function createApp({
 
     try {
       if (!isLoopbackRequestFn(req)) {
-        if (!accessToken) {
+        if (!allowRemoteAccess && !accessToken) {
           throw new HttpRequestError("This app only accepts local requests.", {
             status: 403,
             code: "local_access_only",
           })
         }
 
-        if (presentedAccessToken !== accessToken) {
+        if (!allowRemoteAccess && presentedAccessToken !== accessToken) {
           throw new HttpRequestError("Missing or invalid access token.", {
             status: 401,
             code: "invalid_access_token",

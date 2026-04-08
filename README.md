@@ -31,6 +31,18 @@ npm start
 
 6. Open [http://127.0.0.1:3000](http://127.0.0.1:3000)
 
+## Render Deployment
+
+This repo includes [render.yaml](./render.yaml) for a Render web service.
+
+Key deployment notes:
+
+- Render should use `npm install` to build and `npm start` to run
+- The app binds to `0.0.0.0` on Render
+- `ALLOW_REMOTE_ACCESS=true` is enabled in the Render blueprint so the public web service can call `/api/generate`
+- You must set `OPENAI_API_KEY` in Render before the service is actually ready
+- Health check path is `/ready`
+
 ## Environment Variables
 
 - `OPENAI_API_KEY`

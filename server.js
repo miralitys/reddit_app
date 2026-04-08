@@ -33,6 +33,7 @@ const app = createApp({
   publicDir: path.join(__dirname, "public"),
   requestBodyLimit: config.requestBodyLimit,
   accessToken: config.appAccessToken,
+  allowRemoteAccess: config.allowRemoteAccess,
   maxPostTextChars: config.maxPostTextChars,
   maxConcurrentGenerations: config.maxConcurrentGenerations,
   rateLimitWindowMs: config.rateLimitWindowMs,

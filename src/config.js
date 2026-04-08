@@ -13,6 +13,7 @@ const DEFAULT_MAX_CONCURRENT_GENERATIONS = 2
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 12
 const DEFAULT_MAX_POST_TEXT_CHARS = 12000
+const DEFAULT_ALLOW_REMOTE_ACCESS = false
 
 function readPositiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value || ""), 10);
@@ -37,6 +38,29 @@ function bootstrapEnv(targetEnv = process.env, envFilePath = DEFAULT_ENV_FILE_PA
   return targetEnv
 }
 
+function readBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+
+  return fallback;
+}
+
+function resolveDefaultHost(env) {
+  return String(env.RENDER_SERVICE_TYPE || "").trim().toLowerCase() === "web"
+    ? "0.0.0.0"
+    : DEFAULT_HOST;
+}
+
 function resolveLoadConfigOptions(optionsOrEnv) {
   if (
     optionsOrEnv &&
@@ -59,11 +83,13 @@ function loadConfig(optionsOrEnv = process.env) {
   const { env, envFilePath } = resolveLoadConfigOptions(optionsOrEnv)
 
   bootstrapEnv(env, envFilePath)
+  const defaultHost = resolveDefaultHost(env)
 
   return {
-    host: String(env.HOST || DEFAULT_HOST).trim() || DEFAULT_HOST,
+    host: String(env.HOST || defaultHost).trim() || defaultHost,
     port: readPositiveInteger(env.PORT, 3000),
     appAccessToken: String(env.APP_ACCESS_TOKEN || "").trim(),
+    allowRemoteAccess: readBoolean(env.ALLOW_REMOTE_ACCESS, DEFAULT_ALLOW_REMOTE_ACCESS),
     openAiApiKey: String(env.OPENAI_API_KEY || "").trim(),
     openAiModel: String(env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL).trim() || DEFAULT_OPENAI_MODEL,
     openAiBaseUrl:
