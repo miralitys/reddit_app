@@ -706,40 +706,46 @@ function renderSavedTable(items) {
 
   savedTableWrap.classList.remove("empty");
   savedTableWrap.innerHTML = `
-    <div class="saved-table-scroll">
-      <table class="saved-table">
-        <thead>
-          <tr>
-            <th>Дата</th>
-            <th>Персонаж</th>
-            <th>Тип</th>
-            <th>Источник</th>
-            <th>Сгенерированный текст</th>
-            <th>Статус</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${normalizedItems
-            .map(
-              (item) => `
-                <tr data-saved-id="${escapeHtml(item.id)}">
-                  <td>${escapeHtml(formatDate(item.createdAt))}</td>
-                  <td>${escapeHtml(item.personaName || getPersonaLabel(item.personaId))}</td>
-                  <td><span class="saved-type">${escapeHtml(item.contentMode === POST_MODE ? "Посты" : "Комментарии")}</span></td>
-                  <td>${buildSavedSourceMarkup(item)}</td>
-                  <td>${buildSavedOutputMarkup(item)}</td>
-                  <td>
-                    <select class="saved-status-select" data-saved-id="${escapeHtml(item.id)}">
-                      <option value="new"${item.status === "new" ? " selected" : ""}>Новый</option>
-                      <option value="published"${item.status === "published" ? " selected" : ""}>Опубликованный</option>
-                    </select>
-                  </td>
-                </tr>
-              `,
-            )
-            .join("")}
-        </tbody>
-      </table>
+    <div class="saved-record-list">
+      ${normalizedItems
+        .map(
+          (item) => `
+            <article class="saved-record" data-saved-id="${escapeHtml(item.id)}">
+              <div class="saved-record-head">
+                <div class="saved-record-meta">
+                  <div class="saved-date-block">
+                    <span class="saved-meta-label">Дата</span>
+                    <span class="saved-date-value">${escapeHtml(formatDate(item.createdAt))}</span>
+                  </div>
+                  <div class="saved-persona-block">
+                    <span class="saved-meta-label">Персонаж</span>
+                    <span class="saved-persona-name">${escapeHtml(item.personaName || getPersonaLabel(item.personaId))}</span>
+                  </div>
+                  <span class="saved-type">${escapeHtml(item.contentMode === POST_MODE ? "Посты" : "Комментарии")}</span>
+                </div>
+                <div class="saved-status-block">
+                  <span class="saved-meta-label">Статус</span>
+                  <select class="saved-status-select" data-saved-id="${escapeHtml(item.id)}">
+                    <option value="new"${item.status === "new" ? " selected" : ""}>Новый</option>
+                    <option value="published"${item.status === "published" ? " selected" : ""}>Опубликованный</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="saved-record-grid">
+                <section class="saved-pane saved-source-pane">
+                  <p class="saved-pane-title">Источник</p>
+                  ${buildSavedSourceMarkup(item)}
+                </section>
+                <section class="saved-pane saved-output-pane">
+                  <p class="saved-pane-title">Сгенерированный текст</p>
+                  ${buildSavedOutputMarkup(item)}
+                </section>
+              </div>
+            </article>
+          `,
+        )
+        .join("")}
     </div>
   `;
 
@@ -783,8 +789,8 @@ function renderSavedTable(items) {
   savedTableWrap.querySelectorAll(".saved-copy-button").forEach((button) => {
     button.addEventListener("click", async (event) => {
       const target = event.currentTarget;
-      const row = target.closest("tr");
-      const savedId = row?.dataset.savedId || target.dataset.savedId;
+      const card = target.closest(".saved-record");
+      const savedId = card?.dataset.savedId || target.dataset.savedId;
       const item = normalizedItems.find((candidate) => candidate.id === savedId);
 
       if (!item) {
