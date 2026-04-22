@@ -791,12 +791,25 @@ function buildSavedOutputMarkup(item) {
     : item.contentMode === ASK_CREDIT_MODE
       ? "Скопировать вопрос"
       : "Скопировать комментарий";
+  const publishButtonMarkup = item.contentMode === ASK_CREDIT_MODE
+    ? `
+      <button
+        type="button"
+        class="ghost saved-publish-button${item.status === "published" ? " is-done" : ""}"
+        data-saved-id="${escapeHtml(item.id)}"
+        aria-label="Отметить как опубликованный"
+        title="Отметить как опубликованный"
+        ${item.status === "published" ? "disabled" : ""}
+      >&#10003;</button>
+    `
+    : "";
 
   return `
     ${titleMarkup}
     <div class="saved-output-text">${escapeHtml(item.outputText || "")}</div>
     <div class="saved-output-actions">
       <button type="button" class="ghost saved-copy-button" data-saved-id="${escapeHtml(item.id)}">${escapeHtml(buttonLabel)}</button>
+      ${publishButtonMarkup}
     </div>
   `;
 }
@@ -869,6 +882,22 @@ function renderSavedTable(container, items, options = {}) {
     </div>
   `;
 
+  async function updateSavedStatus(savedId, nextValue) {
+    const response = await fetch(`/api/saved/${encodeURIComponent(savedId)}/status`, {
+      method: "PATCH",
+      headers: buildJsonHeaders(),
+      body: JSON.stringify({ status: nextValue }),
+    });
+
+    const data = await readJsonResponse(response);
+
+    if (!response.ok) {
+      throw new Error(data?.error || "Не удалось обновить статус.");
+    }
+
+    return data;
+  }
+
   container.querySelectorAll(".saved-status-select").forEach((select) => {
     select.addEventListener("change", async (event) => {
       const target = event.currentTarget;
@@ -877,20 +906,19 @@ function renderSavedTable(container, items, options = {}) {
       target.disabled = true;
 
       try {
-        const response = await fetch(`/api/saved/${encodeURIComponent(target.dataset.savedId)}/status`, {
-          method: "PATCH",
-          headers: buildJsonHeaders(),
-          body: JSON.stringify({ status: nextValue }),
-        });
-
-        const data = await readJsonResponse(response);
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Не удалось обновить статус.");
-        }
+        await updateSavedStatus(target.dataset.savedId, nextValue);
 
         target.dataset.currentValue = nextValue;
         target.defaultValue = nextValue;
+
+        const card = target.closest(".saved-record");
+        const publishButton = card?.querySelector(".saved-publish-button");
+        if (publishButton) {
+          const isPublished = nextValue === "published";
+          publishButton.disabled = isPublished;
+          publishButton.classList.toggle("is-done", isPublished);
+        }
+
         if (statusFilterNode && (statusFilterNode.value || "all") !== "all" && statusFilterNode.value !== nextValue) {
           await reload?.({ silentStatus: true });
         }
@@ -904,6 +932,38 @@ function renderSavedTable(container, items, options = {}) {
     });
 
     select.dataset.currentValue = select.value;
+  });
+
+  container.querySelectorAll(".saved-publish-button").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      const target = event.currentTarget;
+      const savedId = target.dataset.savedId;
+      const card = target.closest(".saved-record");
+      const statusSelect = card?.querySelector(".saved-status-select");
+
+      target.disabled = true;
+
+      try {
+        await updateSavedStatus(savedId, "published");
+
+        if (statusSelect) {
+          statusSelect.value = "published";
+          statusSelect.dataset.currentValue = "published";
+          statusSelect.defaultValue = "published";
+        }
+
+        target.classList.add("is-done");
+
+        if (statusFilterNode && (statusFilterNode.value || "all") !== "all" && statusFilterNode.value !== "published") {
+          await reload?.({ silentStatus: true });
+        }
+
+        setStatus("Статус сохраненной записи обновлен.", statusMode);
+      } catch (error) {
+        target.disabled = false;
+        setStatus(error.message || "Не удалось обновить статус.", statusMode);
+      }
+    });
   });
 
   container.querySelectorAll(".saved-copy-button").forEach((button) => {

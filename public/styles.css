@@ -968,10 +968,36 @@ button[type="submit"]:disabled,
 
 .saved-output-actions {
   margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
 .saved-output-actions .ghost {
   padding: 10px 14px;
+}
+
+.saved-publish-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.saved-publish-button.is-done,
+.saved-publish-button:disabled {
+  border-color: rgba(17, 138, 88, 0.18);
+  background: rgba(17, 138, 88, 0.1);
+  color: #118a58;
+  box-shadow: none;
+  cursor: default;
 }
 
 .saved-status-select {
