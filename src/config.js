@@ -1,3 +1,4 @@
+const crypto = require("node:crypto")
 const fs = require("node:fs")
 const path = require("node:path")
 const dotenv = require("dotenv")
@@ -16,6 +17,9 @@ const DEFAULT_MAX_POST_TEXT_CHARS = 12000
 const DEFAULT_ALLOW_REMOTE_ACCESS = false
 const DEFAULT_SAVED_GENERATIONS_FILE = path.resolve(__dirname, "..", "data", "saved-generations.json")
 const DEFAULT_GENERATION_QUEUE_FILE = path.resolve(__dirname, "..", "data", "generation-queue.json")
+const DEFAULT_LOGIN_USERNAME = "Admin"
+const DEFAULT_LOGIN_PASSWORD_HASH = "f8f403916255e73f1eb96f4e9ffb6d1ef79ec54d948c70d7d98f76ff34ad7b4c"
+const DEFAULT_SESSION_SECRET = crypto.randomBytes(32).toString("hex")
 
 function readPositiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value || ""), 10);
@@ -119,6 +123,13 @@ function loadConfig(optionsOrEnv = process.env) {
     generationQueueFile:
       String(env.GENERATION_QUEUE_FILE || DEFAULT_GENERATION_QUEUE_FILE).trim() ||
       DEFAULT_GENERATION_QUEUE_FILE,
+    appLoginUsername:
+      String(env.APP_LOGIN_USERNAME || DEFAULT_LOGIN_USERNAME).trim() || DEFAULT_LOGIN_USERNAME,
+    appLoginPasswordHash:
+      String(env.APP_LOGIN_PASSWORD_HASH || DEFAULT_LOGIN_PASSWORD_HASH).trim().toLowerCase() ||
+      DEFAULT_LOGIN_PASSWORD_HASH,
+    appSessionSecret:
+      String(env.APP_SESSION_SECRET || DEFAULT_SESSION_SECRET).trim() || DEFAULT_SESSION_SECRET,
     rateLimitWindowMs: readPositiveInteger(
       env.RATE_LIMIT_WINDOW_MS,
       DEFAULT_RATE_LIMIT_WINDOW_MS,

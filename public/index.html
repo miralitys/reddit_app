@@ -14,6 +14,11 @@
   </head>
   <body>
     <main class="shell">
+      <header class="app-toolbar">
+        <span class="session-pill">Protected workspace</span>
+        <button id="logout-button" type="button" class="ghost">Log out</button>
+      </header>
+
       <section class="panel hero hero-panel">
         <div class="hero-copy">
           <p class="eyebrow">Signal-grade Reddit reply engine</p>
@@ -156,18 +161,6 @@
                 <option value="jessica-hall">Jessica Hall</option>
               </select>
               <small class="field-note">Each persona has their own built in voice, pace, and usual comment length.</small>
-            </label>
-
-            <label class="field">
-              <span>Access token (optional)</span>
-              <input
-                id="access-token"
-                name="accessToken"
-                class="shared-access-token-input"
-                type="password"
-                placeholder="Only needed for protected non-loopback access"
-                autocomplete="off"
-              />
             </label>
 
             <div class="promo-options">
@@ -330,17 +323,6 @@
               <option value="michael-turner">Michael Turner</option>
               <option value="jessica-hall">Jessica Hall</option>
             </select>
-          </label>
-
-          <label class="field compact-field">
-            <span>Access token (optional)</span>
-            <input
-              id="ask-credit-access-token"
-              class="shared-access-token-input"
-              type="password"
-              placeholder="Only needed for protected non-loopback access"
-              autocomplete="off"
-            />
           </label>
 
           <div class="saved-actions ask-credit-generate-actions">

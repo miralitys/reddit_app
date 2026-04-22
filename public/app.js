@@ -38,7 +38,7 @@ const askCreditPersonaFilter = document.getElementById("ask-credit-persona-filte
 const askCreditStatusFilter = document.getElementById("ask-credit-status-filter");
 const refreshAskCreditButton = document.getElementById("refresh-ask-credit-button");
 const askCreditTableWrap = document.getElementById("ask-credit-table-wrap");
-const accessTokenInputs = Array.from(document.querySelectorAll(".shared-access-token-input"));
+const logoutButton = document.getElementById("logout-button");
 
 const HISTORY_KEY = "reddit-commentator-history";
 const HISTORY_LIMIT = 8;
@@ -140,17 +140,9 @@ function setStatus(message, mode = contentModeInput.value) {
     });
 }
 
-function getAccessToken() {
-  return accessTokenInputs
-    .map((input) => String(input?.value || "").trim())
-    .find(Boolean) || "";
-}
-
 function buildJsonHeaders() {
-  const accessToken = getAccessToken();
   return {
     "Content-Type": "application/json",
-    ...(accessToken ? { "x-app-access-token": accessToken } : {}),
   };
 }
 
@@ -952,7 +944,7 @@ async function loadLibraryItems(config, options = {}) {
     query.set("contentMode", config.contentMode);
 
     const response = await fetch(`/api/saved?${query.toString()}`, {
-      headers: getAccessToken() ? { "x-app-access-token": getAccessToken() } : {},
+      headers: {},
     });
     const data = await readJsonResponse(response);
 
@@ -1012,7 +1004,7 @@ async function loadQueueJobs(options = {}) {
 
   try {
     const response = await fetch("/api/queue?limit=24", {
-      headers: getAccessToken() ? { "x-app-access-token": getAccessToken() } : {},
+      headers: {},
     });
     const data = await readJsonResponse(response);
 
@@ -1229,6 +1221,19 @@ refreshAskCreditButton.addEventListener("click", () => {
 
 refreshQueueButton.addEventListener("click", () => {
   loadQueueJobs();
+});
+
+logoutButton?.addEventListener("click", async () => {
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: buildJsonHeaders(),
+    });
+  } catch (_error) {
+    // Redirect regardless so the session is effectively dropped in the browser flow.
+  }
+
+  window.location.assign("/login");
 });
 
 queueButton.addEventListener("click", () => {

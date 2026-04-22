@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const express = require("express");
+const { buildLoginPage } = require("./loginPage");
 
 const {
   ConfigurationError,
@@ -20,6 +21,8 @@ const {
 const { getPersonaById } = require("../domain/personas");
 
 const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1"])
+const AUTH_COOKIE_NAME = "reddit_commentator_session"
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14
 
 class HttpRequestError extends Error {
   constructor(message, options = {}) {
@@ -47,6 +50,101 @@ function isLoopbackRequest(req) {
 function readPresentedAccessToken(req) {
   const bearerToken = req.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]
   return String(req.get("x-app-access-token") || bearerToken || "").trim()
+}
+
+function parseCookies(headerValue) {
+  const cookieHeader = String(headerValue || "").trim()
+
+  if (!cookieHeader) {
+    return {}
+  }
+
+  return cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, pair) => {
+      const separatorIndex = pair.indexOf("=")
+      if (separatorIndex <= 0) {
+        return cookies
+      }
+
+      const key = pair.slice(0, separatorIndex).trim()
+      const value = pair.slice(separatorIndex + 1).trim()
+      cookies[key] = decodeURIComponent(value)
+      return cookies
+    }, {})
+}
+
+function createSignature(value, secret) {
+  return crypto.createHmac("sha256", secret).update(value).digest("hex")
+}
+
+function constantTimeEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""))
+  const rightBuffer = Buffer.from(String(right || ""))
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false
+  }
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+function hashPassword(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex")
+}
+
+function buildSessionCookieValue(username, sessionSecret) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      username,
+      expiresAt: Date.now() + SESSION_TTL_MS,
+    }),
+  ).toString("base64url")
+
+  return `${payload}.${createSignature(payload, sessionSecret)}`
+}
+
+function parseSessionCookieValue(cookieValue, sessionSecret) {
+  const [payload, signature] = String(cookieValue || "").split(".")
+
+  if (!payload || !signature) {
+    return null
+  }
+
+  if (!constantTimeEquals(createSignature(payload, sessionSecret), signature)) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"))
+
+    if (!parsed?.username || !parsed?.expiresAt || parsed.expiresAt <= Date.now()) {
+      return null
+    }
+
+    return {
+      username: String(parsed.username),
+      expiresAt: Number(parsed.expiresAt),
+    }
+  } catch {
+    return null
+  }
+}
+
+function shouldUseSecureCookie(req) {
+  return req.secure || String(req.get("x-forwarded-proto") || "").toLowerCase() === "https"
+}
+
+function clearSessionCookie(res, req) {
+  res.cookie(AUTH_COOKIE_NAME, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: shouldUseSecureCookie(req),
+    path: "/",
+    maxAge: 0,
+  })
 }
 
 function createRateLimiter({ windowMs, maxRequests }) {
@@ -200,6 +298,9 @@ function createApp({
   requestBodyLimit = "1mb",
   accessToken = "",
   allowRemoteAccess = false,
+  authUsername = "",
+  authPasswordHash = "",
+  authSessionSecret = "",
   savedOutputsStore = null,
   maxPostTextChars = 12000,
   maxConcurrentGenerations = 2,
@@ -214,6 +315,7 @@ function createApp({
     maxRequests: rateLimitMaxRequests,
   })
   let activeGenerationCount = 0
+  const authEnabled = Boolean(String(authUsername || "").trim() && String(authPasswordHash || "").trim())
 
   app.disable("x-powered-by")
   app.use((req, res, next) => {
@@ -230,9 +332,31 @@ function createApp({
     next()
   })
   app.use(express.json({ limit: requestBodyLimit }));
-  app.use(express.static(publicDir));
+
+  function getAuthenticatedSession(req) {
+    if (!authEnabled) {
+      return { username: String(authUsername || "").trim() || "Admin" }
+    }
+
+    const cookies = parseCookies(req.headers.cookie)
+    const parsedSession = parseSessionCookieValue(cookies[AUTH_COOKIE_NAME], authSessionSecret)
+
+    if (!parsedSession) {
+      return null
+    }
+
+    if (parsedSession.username !== authUsername) {
+      return null
+    }
+
+    return parsedSession
+  }
 
   function assertAllowedRequest(req) {
+    if (getAuthenticatedSession(req)) {
+      return
+    }
+
     const presentedAccessToken = readPresentedAccessToken(req)
 
     if (!isLoopbackRequestFn(req)) {
@@ -275,6 +399,102 @@ function createApp({
       remoteAccessEnabled: allowRemoteAccess,
     })
   })
+
+  app.get("/login", (req, res) => {
+    if (getAuthenticatedSession(req)) {
+      return res.redirect("/")
+    }
+
+    res.type("html").send(buildLoginPage())
+  })
+
+  app.post("/api/auth/login", (req, res) => {
+    const username = String(req.body?.username || "").trim()
+    const password = String(req.body?.password || "")
+
+    if (!username || !password) {
+      return res.status(400).json({
+        error: "Enter both login and password.",
+        code: "missing_credentials",
+        requestId: req.requestId,
+      })
+    }
+
+    const usernameMatches = constantTimeEquals(username, authUsername)
+    const passwordMatches = constantTimeEquals(hashPassword(password), authPasswordHash)
+
+    if (!usernameMatches || !passwordMatches) {
+      return res.status(401).json({
+        error: "Invalid login or password.",
+        code: "invalid_credentials",
+        requestId: req.requestId,
+      })
+    }
+
+    res.cookie(AUTH_COOKIE_NAME, buildSessionCookieValue(authUsername, authSessionSecret), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: shouldUseSecureCookie(req),
+      path: "/",
+      maxAge: SESSION_TTL_MS,
+    })
+
+    return res.json({
+      ok: true,
+      username: authUsername,
+    })
+  })
+
+  app.post("/api/auth/logout", (req, res) => {
+    clearSessionCookie(res, req)
+    return res.json({ ok: true })
+  })
+
+  app.get("/api/auth/session", (req, res) => {
+    const session = getAuthenticatedSession(req)
+
+    if (!session) {
+      return res.status(401).json({
+        ok: false,
+        code: "auth_required",
+        requestId: req.requestId,
+      })
+    }
+
+    return res.json({
+      ok: true,
+      username: session.username,
+    })
+  })
+
+  app.use((req, res, next) => {
+    const openPaths = new Set([
+      "/health",
+      "/ready",
+      "/login",
+      "/api/auth/login",
+    ])
+
+    if (!authEnabled || openPaths.has(req.path)) {
+      return next()
+    }
+
+    if (getAuthenticatedSession(req)) {
+      return next()
+    }
+
+    if (req.path === "/api/auth/logout" || req.path === "/api/auth/session" || req.path.startsWith("/api/")) {
+      return res.status(401).json({
+        error: "Authentication required.",
+        code: "auth_required",
+        requestId: req.requestId,
+      })
+    }
+
+    return res.redirect("/login")
+  })
+
+  app.use(express.static(publicDir));
 
   app.get("/api/saved", async (req, res) => {
     try {
