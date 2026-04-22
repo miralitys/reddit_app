@@ -6,6 +6,7 @@ const {
   createOpenAIResponsesClient,
 } = require("./src/infrastructure/openaiResponsesClient");
 const { createRedditPostClient } = require("./src/infrastructure/redditPostClient");
+const { createSavedOutputsStore } = require("./src/infrastructure/savedOutputsStore");
 const { createApp } = require("./src/presentation/createApp");
 const { createLogger } = require("./src/shared/logger");
 
@@ -19,6 +20,10 @@ const openAiClient = createOpenAIResponsesClient({
   logger,
 });
 const redditPostClient = createRedditPostClient({ logger });
+const savedOutputsStore = createSavedOutputsStore({
+  filePath: config.savedGenerationsFile,
+  logger,
+});
 const generationService = createGenerationService({
   openAiClient,
   redditPostClient,
@@ -34,6 +39,7 @@ const app = createApp({
   requestBodyLimit: config.requestBodyLimit,
   accessToken: config.appAccessToken,
   allowRemoteAccess: config.allowRemoteAccess,
+  savedOutputsStore,
   maxPostTextChars: config.maxPostTextChars,
   maxConcurrentGenerations: config.maxConcurrentGenerations,
   rateLimitWindowMs: config.rateLimitWindowMs,

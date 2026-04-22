@@ -10,7 +10,9 @@ const {
   OpenAIResponseError,
   withOpenAIRequestContext,
 } = require("../infrastructure/openaiResponsesClient");
+const { SavedOutputsStoreError, VALID_SAVED_STATUSES } = require("../infrastructure/savedOutputsStore");
 const { RequestValidationError, validateGenerateRequest } = require("./validation");
+const { getPersonaById } = require("../domain/personas");
 
 const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1"])
 
@@ -105,6 +107,14 @@ function getPublicErrorDetails(error) {
     }
   }
 
+  if (error instanceof SavedOutputsStoreError) {
+    return {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    }
+  }
+
   if (error instanceof OpenAIResponseError) {
     if (error.status === 499) {
       return {
@@ -176,6 +186,7 @@ function createApp({
   requestBodyLimit = "1mb",
   accessToken = "",
   allowRemoteAccess = false,
+  savedOutputsStore = null,
   maxPostTextChars = 12000,
   maxConcurrentGenerations = 2,
   rateLimitWindowMs = 60000,
@@ -207,6 +218,26 @@ function createApp({
   app.use(express.json({ limit: requestBodyLimit }));
   app.use(express.static(publicDir));
 
+  function assertAllowedRequest(req) {
+    const presentedAccessToken = readPresentedAccessToken(req)
+
+    if (!isLoopbackRequestFn(req)) {
+      if (!allowRemoteAccess && !accessToken) {
+        throw new HttpRequestError("This app only accepts local requests.", {
+          status: 403,
+          code: "local_access_only",
+        })
+      }
+
+      if (!allowRemoteAccess && presentedAccessToken !== accessToken) {
+        throw new HttpRequestError("Missing or invalid access token.", {
+          status: 401,
+          code: "invalid_access_token",
+        })
+      }
+    }
+  }
+
   app.get("/health", (_req, res) => {
     const ready = Boolean(openAiConfigured && model && generationService?.generateComments)
     res.json({
@@ -231,11 +262,95 @@ function createApp({
     })
   })
 
+  app.get("/api/saved", async (req, res) => {
+    try {
+      assertAllowedRequest(req)
+
+      if (!savedOutputsStore) {
+        throw new SavedOutputsStoreError("Saved outputs storage is not configured.", {
+          status: 503,
+          code: "saved_outputs_unavailable",
+        })
+      }
+
+      const personaId = String(req.query.personaId || "").trim();
+      const status = String(req.query.status || "all").trim().toLowerCase() || "all";
+
+      if (personaId && personaId !== "all" && !getPersonaById(personaId)) {
+        throw new RequestValidationError("personaId filter is invalid.");
+      }
+
+      if (status !== "all" && !VALID_SAVED_STATUSES.has(status)) {
+        throw new RequestValidationError("status filter is invalid.");
+      }
+
+      const items = await savedOutputsStore.listItems({
+        personaId: personaId === "all" ? "" : personaId,
+        status,
+      });
+
+      return res.json({ items });
+    } catch (error) {
+      const publicError = getPublicErrorDetails(error)
+
+      logger?.error("Saved list request failed", {
+        requestId: req.requestId,
+        status: publicError.status,
+        error_code: error?.name || "Error",
+        public_error_code: publicError.code,
+        message: error?.message || "Unexpected server error.",
+      });
+
+      return res.status(publicError.status).json({
+        error: publicError.message,
+        code: publicError.code,
+        requestId: req.requestId,
+      });
+    }
+  })
+
+  app.patch("/api/saved/:id/status", async (req, res) => {
+    try {
+      assertAllowedRequest(req)
+
+      if (!savedOutputsStore) {
+        throw new SavedOutputsStoreError("Saved outputs storage is not configured.", {
+          status: 503,
+          code: "saved_outputs_unavailable",
+        })
+      }
+
+      const nextStatus = String(req.body?.status || "").trim().toLowerCase();
+
+      if (!VALID_SAVED_STATUSES.has(nextStatus)) {
+        throw new RequestValidationError("Saved status must be new or published.");
+      }
+
+      const item = await savedOutputsStore.updateStatus(req.params.id, nextStatus);
+      return res.json({ item });
+    } catch (error) {
+      const publicError = getPublicErrorDetails(error)
+
+      logger?.error("Saved status update failed", {
+        requestId: req.requestId,
+        status: publicError.status,
+        error_code: error?.name || "Error",
+        public_error_code: publicError.code,
+        message: error?.message || "Unexpected server error.",
+      });
+
+      return res.status(publicError.status).json({
+        error: publicError.message,
+        code: publicError.code,
+        requestId: req.requestId,
+      });
+    }
+  })
+
   app.post("/api/generate", async (req, res) => {
     const requestId = req.requestId
     const remoteAddress = normalizeRemoteAddress(req.socket?.remoteAddress)
     const admissionKey = remoteAddress || "unknown"
-    const presentedAccessToken = readPresentedAccessToken(req)
     const disconnectController = new AbortController()
     let releaseGenerationSlot = null
 
@@ -255,21 +370,7 @@ function createApp({
     res.once("close", handleResponseClose)
 
     try {
-      if (!isLoopbackRequestFn(req)) {
-        if (!allowRemoteAccess && !accessToken) {
-          throw new HttpRequestError("This app only accepts local requests.", {
-            status: 403,
-            code: "local_access_only",
-          })
-        }
-
-        if (!allowRemoteAccess && presentedAccessToken !== accessToken) {
-          throw new HttpRequestError("Missing or invalid access token.", {
-            status: 401,
-            code: "invalid_access_token",
-          })
-        }
-      }
+      assertAllowedRequest(req)
 
       if (!rateLimiter.consume(admissionKey)) {
         throw new HttpRequestError("Too many generation attempts. Please wait a moment.", {
@@ -306,7 +407,32 @@ function createApp({
         return
       }
 
-      return res.json(result);
+      let savedItems = [];
+      let savedItemsError = false;
+
+      if (savedOutputsStore) {
+        try {
+          savedItems = await savedOutputsStore.saveGeneration({
+            ...payload,
+            replies: result.replies,
+            generationMode: result.generationMode,
+            sourceContext: result.sourceContext,
+            persona: result.persona || null,
+          });
+        } catch (error) {
+          savedItemsError = true;
+          logger?.warn("Failed to persist generated outputs", {
+            requestId,
+            message: error?.message || "Unknown error",
+          });
+        }
+      }
+
+      return res.json({
+        ...result,
+        savedItemsCount: savedItems.length,
+        savedItemsError,
+      });
     } catch (error) {
       if (disconnectController.signal.aborted || req.aborted || res.destroyed) {
         logger?.warn("Generate request cancelled", {

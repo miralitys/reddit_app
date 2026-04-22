@@ -7,10 +7,12 @@ Local-first Node.js web app for generating credit-focused Reddit comments and pe
 - Generates one Reddit-ready comment for a selected persona
 - Generates a full batch of 10 comments, one per persona
 - Supports a `Комментарии` mode for replies and a `Посты` mode for post rewrites
+- Includes a `Сохраненные` mode with server-side saved outputs shared across devices
 - Accepts either pasted text or a Reddit post URL in comment mode
 - Pulls Reddit title, body, attached image context, and visible text from images when possible
 - Rewrites posts in persona voice while keeping the original title unchanged in post mode
 - Stores recent generations in browser local storage for quick reuse
+- Stores generated comments and posts in a server-side JSON file for shared review and status tracking
 
 ## Setup
 
@@ -57,6 +59,7 @@ Key deployment notes:
 - `RATE_LIMIT_WINDOW_MS`
 - `RATE_LIMIT_MAX_REQUESTS`
 - `REQUEST_BODY_LIMIT`
+- `SAVED_GENERATIONS_FILE`
 
 ## App Modes
 
@@ -77,6 +80,13 @@ Key deployment notes:
 - The title stays unchanged
 - Or generate one rewritten version for all 10 personas
 
+### Сохраненные
+
+- Shows generated comments and posts in a shared table
+- Persists data on the server so it is visible from another computer
+- Includes filters by persona and status
+- Lets you mark each row as `new` or `published`
+
 ## Stack
 
 - Node.js
@@ -96,5 +106,7 @@ npm test
 ## Notes
 
 - The app is local-first by default
+- Shared saved outputs are written to `SAVED_GENERATIONS_FILE`
+- On Render, use a persistent disk for `SAVED_GENERATIONS_FILE` if you want saved records to survive deploys and restarts
 - `.env` is not committed
 - The API key should stay only in local environment files and never be pasted into GitHub

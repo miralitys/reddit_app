@@ -18,14 +18,26 @@ const outputKicker = document.getElementById("output-kicker");
 const outputTitle = document.getElementById("output-title");
 const modeTabs = Array.from(document.querySelectorAll(".mode-tab"));
 const promoOptions = document.querySelector(".promo-options");
+const generatorSections = document.getElementById("generator-sections");
+const savedSection = document.getElementById("saved-section");
+const savedPersonaFilter = document.getElementById("saved-persona-filter");
+const savedStatusFilter = document.getElementById("saved-status-filter");
+const refreshSavedButton = document.getElementById("refresh-saved-button");
+const savedTableWrap = document.getElementById("saved-table-wrap");
+const accessTokenInput = document.getElementById("access-token");
 
 const HISTORY_KEY = "reddit-commentator-history";
 const HISTORY_LIMIT = 8;
 const COMMENT_MODE = "comments";
 const POST_MODE = "posts";
+const SAVED_MODE = "saved";
 
 function getSafeContentMode(value) {
-  return value === POST_MODE ? POST_MODE : COMMENT_MODE;
+  if (value === POST_MODE || value === SAVED_MODE) {
+    return value;
+  }
+
+  return COMMENT_MODE;
 }
 
 function stripLegacyPromoDisclosure(text) {
@@ -66,6 +78,18 @@ function sanitizeHistoryEntry(entry) {
   };
 }
 
+function sanitizeSavedItem(item) {
+  if (!item || typeof item !== "object") {
+    return item;
+  }
+
+  return {
+    ...item,
+    contentMode: getSafeContentMode(item.contentMode),
+    outputText: stripLegacyPromoDisclosure(item.outputText || ""),
+  };
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -77,6 +101,18 @@ function escapeHtml(value) {
 
 function setStatus(message) {
   statusNode.textContent = message;
+}
+
+function getAccessToken() {
+  return String(accessTokenInput?.value || "").trim();
+}
+
+function buildJsonHeaders() {
+  const accessToken = getAccessToken();
+  return {
+    "Content-Type": "application/json",
+    ...(accessToken ? { "x-app-access-token": accessToken } : {}),
+  };
 }
 
 async function copyText(text) {
@@ -172,6 +208,22 @@ function getModeConfig(mode) {
       generatingAll: "Generating 10 persona posts...",
       successSingle: "Post generated.",
       successAll: "All 10 persona posts generated.",
+    };
+  }
+
+  if (getSafeContentMode(mode) === SAVED_MODE) {
+    return {
+      formKicker: "Сохраненные",
+      formTitle: "Saved library",
+      outputKicker: "Сохраненные",
+      outputTitle: "Saved outputs",
+      submitLabel: "Generate comment",
+      submitAllLabel: "Generate all 10 personas",
+      emptyResults: "Your shared saved outputs will appear here.",
+      generatingSingle: "",
+      generatingAll: "",
+      successSingle: "",
+      successAll: "",
     };
   }
 
@@ -287,6 +339,10 @@ function setContentMode(mode, options = {}) {
     tab.classList.toggle("is-active", tab.dataset.mode === safeMode);
   });
 
+  const isSavedMode = safeMode === SAVED_MODE;
+
+  generatorSections.classList.toggle("hidden", isSavedMode);
+  savedSection.classList.toggle("hidden", !isSavedMode);
   commentFields.classList.toggle("hidden", safeMode !== COMMENT_MODE);
   postFields.classList.toggle("hidden", safeMode !== POST_MODE);
   promoOptions.classList.toggle("hidden", safeMode !== COMMENT_MODE);
@@ -298,15 +354,15 @@ function setContentMode(mode, options = {}) {
   submitButton.textContent = config.submitLabel;
   submitAllButton.textContent = config.submitAllLabel;
 
-  if (safeMode !== COMMENT_MODE) {
-    renderSourceContext(null, safeMode);
-  } else {
-    renderSourceContext(null, safeMode);
-  }
+  renderSourceContext(null, safeMode);
 
-  if (shouldResetOutput) {
+  if (shouldResetOutput && !isSavedMode) {
     renderEmpty(config.emptyResults);
     setStatus("");
+  }
+
+  if (isSavedMode) {
+    loadSavedItems();
   }
 }
 
@@ -491,6 +547,153 @@ function renderEmpty(message) {
   results.append(text);
 }
 
+function renderSavedEmpty(message) {
+  savedTableWrap.classList.add("empty");
+  savedTableWrap.innerHTML = `<p>${escapeHtml(message)}</p>`;
+}
+
+function buildSavedSourceMarkup(item) {
+  const sourceLabel = item.sourceTitle || item.sourcePreview || "No source";
+
+  if (item.sourceLink) {
+    return `
+      <a class="saved-link" href="${escapeHtml(item.sourceLink)}" target="_blank" rel="noreferrer">${escapeHtml(sourceLabel)}</a>
+      <div class="saved-source-meta">${escapeHtml(item.sourceLink)}</div>
+    `;
+  }
+
+  return `
+    <span class="saved-source-text">${escapeHtml(sourceLabel)}</span>
+  `;
+}
+
+function buildSavedOutputMarkup(item) {
+  const titleMarkup = item.outputTitle
+    ? `<div class="saved-output-title">${escapeHtml(item.outputTitle)}</div>`
+    : "";
+
+  return `
+    ${titleMarkup}
+    <div class="saved-output-text">${escapeHtml(item.outputText || "")}</div>
+  `;
+}
+
+function renderSavedTable(items) {
+  const normalizedItems = Array.isArray(items) ? items.map(sanitizeSavedItem) : [];
+
+  if (!normalizedItems.length) {
+    renderSavedEmpty("По текущим фильтрам ничего не найдено.");
+    return;
+  }
+
+  savedTableWrap.classList.remove("empty");
+  savedTableWrap.innerHTML = `
+    <div class="saved-table-scroll">
+      <table class="saved-table">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Персонаж</th>
+            <th>Тип</th>
+            <th>Источник</th>
+            <th>Сгенерированный текст</th>
+            <th>Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${normalizedItems
+            .map(
+              (item) => `
+                <tr data-saved-id="${escapeHtml(item.id)}">
+                  <td>${escapeHtml(formatDate(item.createdAt))}</td>
+                  <td>${escapeHtml(item.personaName || getPersonaLabel(item.personaId))}</td>
+                  <td><span class="saved-type">${escapeHtml(item.contentMode === POST_MODE ? "Посты" : "Комментарии")}</span></td>
+                  <td>${buildSavedSourceMarkup(item)}</td>
+                  <td>${buildSavedOutputMarkup(item)}</td>
+                  <td>
+                    <select class="saved-status-select" data-saved-id="${escapeHtml(item.id)}">
+                      <option value="new"${item.status === "new" ? " selected" : ""}>Новый</option>
+                      <option value="published"${item.status === "published" ? " selected" : ""}>Опубликованный</option>
+                    </select>
+                  </td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  savedTableWrap.querySelectorAll(".saved-status-select").forEach((select) => {
+    select.addEventListener("change", async (event) => {
+      const target = event.currentTarget;
+      const originalValue = target.dataset.currentValue || target.defaultValue || "new";
+      const nextValue = target.value;
+      target.disabled = true;
+
+      try {
+        const response = await fetch(`/api/saved/${encodeURIComponent(target.dataset.savedId)}/status`, {
+          method: "PATCH",
+          headers: buildJsonHeaders(),
+          body: JSON.stringify({ status: nextValue }),
+        });
+
+        const data = await readJsonResponse(response);
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Не удалось обновить статус.");
+        }
+
+        target.dataset.currentValue = nextValue;
+        target.defaultValue = nextValue;
+        if ((savedStatusFilter.value || "all") !== "all" && savedStatusFilter.value !== nextValue) {
+          await loadSavedItems({ silentStatus: true });
+        }
+        setStatus("Статус сохраненной записи обновлен.");
+      } catch (error) {
+        target.value = originalValue;
+        setStatus(error.message || "Не удалось обновить статус.");
+      } finally {
+        target.disabled = false;
+      }
+    });
+
+    select.dataset.currentValue = select.value;
+  });
+}
+
+async function loadSavedItems(options = {}) {
+  const silentStatus = Boolean(options.silentStatus);
+  savedTableWrap.classList.add("empty");
+  savedTableWrap.innerHTML = "<p>Загружаю сохраненные записи...</p>";
+
+  try {
+    const query = new URLSearchParams();
+    query.set("personaId", savedPersonaFilter.value || "all");
+    query.set("status", savedStatusFilter.value || "all");
+
+    const response = await fetch(`/api/saved?${query.toString()}`, {
+      headers: getAccessToken() ? { "x-app-access-token": getAccessToken() } : {},
+    });
+    const data = await readJsonResponse(response);
+
+    if (!response.ok) {
+      throw new Error(data?.error || "Не удалось загрузить сохраненные записи.");
+    }
+
+    renderSavedTable(data?.items || []);
+    if (!silentStatus) {
+      setStatus("Сохраненные записи загружены.");
+    }
+  } catch (error) {
+    renderSavedEmpty(error.message || "Не удалось загрузить сохраненные записи.");
+    if (!silentStatus) {
+      setStatus("Не удалось загрузить сохраненные записи.");
+    }
+  }
+}
+
 async function readJsonResponse(response) {
   if (typeof response?.text === "function") {
     const rawText = await response.text();
@@ -536,6 +739,22 @@ modeTabs.forEach((tab) => {
   });
 });
 
+savedPersonaFilter.addEventListener("change", () => {
+  if (getSafeContentMode(contentModeInput.value) === SAVED_MODE) {
+    loadSavedItems();
+  }
+});
+
+savedStatusFilter.addEventListener("change", () => {
+  if (getSafeContentMode(contentModeInput.value) === SAVED_MODE) {
+    loadSavedItems();
+  }
+});
+
+refreshSavedButton.addEventListener("click", () => {
+  loadSavedItems();
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -554,7 +773,6 @@ form.addEventListener("submit", async (event) => {
     promoCreditBooster: contentMode === COMMENT_MODE && formData.get("promoCreditBooster") === "on",
     generateAllPersonas: generationMode === "all-personas",
   };
-  const accessToken = String(formData.get("accessToken") || "").trim();
   const hasRedditUrl = contentMode === COMMENT_MODE && String(payload.redditUrl || "").trim().length > 0;
   const modeConfig = getModeConfig(contentMode);
 
@@ -591,10 +809,7 @@ form.addEventListener("submit", async (event) => {
   try {
     const response = await fetch("/api/generate", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(accessToken ? { "x-app-access-token": accessToken } : {}),
-      },
+      headers: buildJsonHeaders(),
       body: JSON.stringify(payload),
     });
 
@@ -626,14 +841,21 @@ form.addEventListener("submit", async (event) => {
       sourceContext: data.sourceContext || null,
       replies: sanitizedOutputs,
     });
+
+    const saveSuffix = data.savedItemsError
+      ? " Общая библиотека сохранений не обновилась."
+      : data.savedItemsCount > 0
+        ? " Сохранено в общий раздел."
+        : "";
+
     setStatus(
       historySaved
         ? generationMode === "all-personas"
-          ? modeConfig.successAll
-          : modeConfig.successSingle
+          ? `${modeConfig.successAll}${saveSuffix}`
+          : `${modeConfig.successSingle}${saveSuffix}`
         : generationMode === "all-personas"
-          ? `${modeConfig.successAll} History could not be saved on this device.`
-          : `${modeConfig.successSingle} History could not be saved on this device.`,
+          ? `${modeConfig.successAll} History could not be saved on this device.${saveSuffix}`
+          : `${modeConfig.successSingle} History could not be saved on this device.${saveSuffix}`,
     );
   } catch (error) {
     renderEmpty(error.message || "Something went wrong.");

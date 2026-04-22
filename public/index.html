@@ -28,7 +28,7 @@
             <span class="badge">10 personas</span>
             <span class="badge">Comments and posts</span>
             <span class="badge">Single or all 10</span>
-            <span class="badge">History on device</span>
+            <span class="badge">Shared saved library</span>
           </div>
         </div>
 
@@ -65,9 +65,11 @@
       <section class="mode-switch" aria-label="Generation modes">
         <button type="button" class="mode-tab is-active" data-mode="comments">Комментарии</button>
         <button type="button" class="mode-tab" data-mode="posts">Посты</button>
+        <button type="button" class="mode-tab" data-mode="saved">Сохраненные</button>
       </section>
 
-      <section class="workspace">
+      <div id="generator-sections">
+      <section id="workspace-section" class="workspace">
         <section class="panel form-panel">
           <div class="section-head">
             <p id="form-kicker" class="section-kicker">Комментарии</p>
@@ -209,7 +211,7 @@
         </section>
       </section>
 
-      <section class="panel history-panel">
+      <section id="history-panel" class="panel history-panel">
         <div class="section-head output-head">
           <div>
             <p class="section-kicker">Memory Bank</p>
@@ -219,6 +221,50 @@
         </div>
         <div id="history" class="history empty">
           <p>Your latest comment and post generations will appear here.</p>
+        </div>
+      </section>
+      </div>
+
+      <section id="saved-section" class="panel saved-panel hidden">
+        <div class="section-head">
+          <p class="section-kicker">Сохраненные</p>
+          <h2>Saved outputs</h2>
+        </div>
+
+        <div class="saved-controls">
+          <label class="field compact-field">
+            <span>Persona</span>
+            <select id="saved-persona-filter">
+              <option value="all" selected>Все персонажи</option>
+              <option value="alex-moreno">Alex Moreno</option>
+              <option value="marina-volk">Marina Volk</option>
+              <option value="daniel-price">Daniel Price</option>
+              <option value="olga-sokolova">Olga Sokolova</option>
+              <option value="kevin-brooks">Kevin Brooks</option>
+              <option value="sophia-grant">Sophia Grant</option>
+              <option value="eric-nolan">Eric Nolan</option>
+              <option value="natalia-reed">Natalia Reed</option>
+              <option value="michael-turner">Michael Turner</option>
+              <option value="jessica-hall">Jessica Hall</option>
+            </select>
+          </label>
+
+          <label class="field compact-field">
+            <span>Status</span>
+            <select id="saved-status-filter">
+              <option value="all" selected>Все</option>
+              <option value="new">Новые</option>
+              <option value="published">Опубликованные</option>
+            </select>
+          </label>
+
+          <div class="saved-actions">
+            <button id="refresh-saved-button" type="button" class="ghost">Обновить</button>
+          </div>
+        </div>
+
+        <div id="saved-table-wrap" class="saved-table-wrap empty">
+          <p>Здесь будут все сохраненные комментарии и посты, доступные с любого компьютера.</p>
         </div>
       </section>
     </main>
