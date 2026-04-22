@@ -1050,16 +1050,6 @@ async function enqueueGeneration(generationMode) {
   }
 }
 
-function syncAccessTokenInputs(changedInput) {
-  const nextValue = String(changedInput?.value || "");
-
-  accessTokenInputs.forEach((input) => {
-    if (input !== changedInput && input.value !== nextValue) {
-      input.value = nextValue;
-    }
-  });
-}
-
 function buildAskCreditPayload(generationMode) {
   return {
     contentMode: ASK_CREDIT_MODE,
@@ -1173,12 +1163,6 @@ promoCreditClubCheckbox.addEventListener("change", () => {
 
 promoCreditBoosterCheckbox.addEventListener("change", () => {
   syncPromoSelection(promoCreditBoosterCheckbox, promoCreditClubCheckbox);
-});
-
-accessTokenInputs.forEach((input) => {
-  input.addEventListener("input", (event) => {
-    syncAccessTokenInputs(event.currentTarget);
-  });
 });
 
 modeTabs.forEach((tab) => {
