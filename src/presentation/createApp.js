@@ -472,6 +472,7 @@ function createApp({
       "/health",
       "/ready",
       "/login",
+      "/login.js",
       "/api/auth/login",
     ])
 
