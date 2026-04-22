@@ -5,6 +5,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createGenerationService } = require("../src/application/generateReplies");
+const {
+  ASK_CREDIT_MIN_CHARS,
+  ASK_CREDIT_MAX_CHARS,
+  buildAskCreditUserPrompt,
+  normalizeGeneratedAskCreditQuestions,
+} = require("../src/domain/askCreditRules");
+const { getPersonaById } = require("../src/domain/personas");
 const { createSavedOutputsStore } = require("../src/infrastructure/savedOutputsStore");
 const { createApp } = require("../src/presentation/createApp");
 const { validateGenerateRequest } = require("../src/presentation/validation");
@@ -63,10 +70,13 @@ test("generation service returns a normalized Ask Credit question for one person
     async createStructuredResponse(request) {
       assert.equal(request.responseSchemaName, "ask_credit_single_question");
       assert.match(request.userPrompt, /Write exactly 1 Ask Credit question/i);
+      assert.match(request.userPrompt, /between 100 and 300 characters/i);
+      assert.match(request.userPrompt, /Do not make it about credit history/i);
+      assert.match(request.userPrompt, /cars/i);
       return {
         replies: [
           {
-            text: "I rebuilt from a secured card and now I am wondering if closing it too early could mess up my profile",
+            text: "Is it a bad sign if I would rather keep an older reliable car and lower stress than chase a nicer one just because people around me say I should be upgrading by now",
           },
         ],
       };
@@ -94,7 +104,57 @@ test("generation service returns a normalized Ask Credit question for one person
   assert.equal(result.replies.length, 1);
   assert.equal(
     result.replies[0].text,
-    "I rebuilt from a secured card and now I am wondering if closing it too early could mess up my profile?",
+    "Is it a bad sign if I would rather keep an older reliable car and lower stress than chase a nicer one just because people around me say I should be upgrading by now?",
+  );
+  assert.ok(result.replies[0].text.length >= ASK_CREDIT_MIN_CHARS);
+  assert.ok(result.replies[0].text.length <= ASK_CREDIT_MAX_CHARS);
+  assert.ok(result.replies[0].text.endsWith("?"));
+});
+
+test("Ask Credit prompt uses persona-specific engagement brief and avoids credit-history topics", () => {
+  const prompt = buildAskCreditUserPrompt({
+    persona: getPersonaById("sophia-grant"),
+    questionCount: 1,
+  });
+
+  assert.match(prompt, /small business life/i);
+  assert.match(prompt, /client boundaries/i);
+  assert.match(prompt, /between 100 and 300 characters/i);
+  assert.match(prompt, /Do not make it about credit history/i);
+});
+
+test("Ask Credit normalization trims long text and forces a trailing question mark", () => {
+  const result = normalizeGeneratedAskCreditQuestions(
+    {
+      replies: [
+        {
+          text: "Is it weird that I make a full spreadsheet before every big purchase because once I start comparing versions and reading reviews I lose a whole weekend to it and still end up buying the same safe option anyway while telling myself I am being rational even though this is probably just dressed up anxiety and overthinking",
+        },
+      ],
+    },
+    { questionCount: 1 },
+  );
+
+  assert.equal(result.length, 1);
+  assert.ok(result[0].text.length >= ASK_CREDIT_MIN_CHARS);
+  assert.ok(result[0].text.length <= ASK_CREDIT_MAX_CHARS);
+  assert.ok(result[0].text.endsWith("?"));
+});
+
+test("Ask Credit normalization rejects questions that are too short", () => {
+  assert.throws(
+    () =>
+      normalizeGeneratedAskCreditQuestions(
+        {
+          replies: [
+            {
+              text: "How do people stay disciplined when every app is trying to keep you distracted all day?",
+            },
+          ],
+        },
+        { questionCount: 1 },
+      ),
+    /at least 100 characters/i,
   );
 });
 
