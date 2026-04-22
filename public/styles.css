@@ -400,7 +400,6 @@ input:focus {
   line-height: 1.5;
 }
 
-.actions,
 .output-head {
   display: flex;
   justify-content: space-between;
@@ -408,14 +407,54 @@ input:focus {
   gap: 16px;
 }
 
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
+.actions {
+  display: grid;
+  gap: 14px;
+}
+
+.action-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.action-cluster {
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(24, 31, 56, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 249, 253, 0.72));
+  box-shadow: var(--shadow-soft);
+}
+
+.action-cluster-primary {
+  background:
+    linear-gradient(180deg, rgba(245, 248, 255, 0.96), rgba(237, 243, 255, 0.82));
+}
+
+.action-cluster-queue {
+  background:
+    linear-gradient(180deg, rgba(252, 253, 255, 0.96), rgba(245, 248, 253, 0.82));
+}
+
+.action-label {
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.action-stack {
+  display: grid;
   gap: 10px;
 }
 
-.action-buttons button {
-  flex: 0 0 auto;
+.action-stack button {
+  width: 100%;
+  justify-content: center;
 }
 
 button {
@@ -460,6 +499,7 @@ button[type="submit"]:disabled,
 .status {
   margin: 0;
   min-height: 1.25rem;
+  padding: 0 6px;
   color: var(--accent);
   font-size: 0.78rem;
   text-transform: uppercase;
@@ -896,14 +936,18 @@ button[type="submit"]:disabled,
     width: 100%;
   }
 
-  .actions,
   .output-head {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .action-buttons {
-    width: 100%;
+  .action-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .actions,
+  .output-head {
+    align-items: stretch;
   }
 
   h1 {

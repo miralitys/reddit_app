@@ -186,15 +186,26 @@
             </div>
 
             <div class="actions">
-              <div class="action-buttons">
-                <button id="submit-button" type="submit" value="single">Generate comment</button>
-                <button id="submit-all-button" type="submit" value="all-personas" class="ghost">
-                  Generate all 10 personas
-                </button>
-                <button id="queue-button" type="button" class="ghost">Add comment to queue</button>
-                <button id="queue-all-button" type="button" class="ghost">
-                  Queue all 10 personas
-                </button>
+              <div class="action-layout">
+                <section class="action-cluster action-cluster-primary">
+                  <p class="action-label">Generate Now</p>
+                  <div class="action-stack">
+                    <button id="submit-button" type="submit" value="single">Generate comment</button>
+                    <button id="submit-all-button" type="submit" value="all-personas" class="ghost">
+                      Generate all 10 personas
+                    </button>
+                  </div>
+                </section>
+
+                <section class="action-cluster action-cluster-queue">
+                  <p class="action-label">Background Queue</p>
+                  <div class="action-stack">
+                    <button id="queue-button" type="button" class="ghost">Add comment to queue</button>
+                    <button id="queue-all-button" type="button" class="ghost">
+                      Queue all 10 personas
+                    </button>
+                  </div>
+                </section>
               </div>
               <p id="status" class="status" aria-live="polite"></p>
             </div>
