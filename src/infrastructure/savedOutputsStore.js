@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 
 const VALID_SAVED_STATUSES = new Set(["new", "published"]);
+const VALID_SAVED_CONTENT_MODES = new Set(["comments", "posts", "ask-credit"]);
 
 class SavedOutputsStoreError extends Error {
   constructor(message, options = {}) {
@@ -31,6 +32,15 @@ function sanitizeStatus(value) {
   return "new";
 }
 
+function sanitizeContentMode(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (VALID_SAVED_CONTENT_MODES.has(normalized)) {
+    return normalized;
+  }
+
+  return "comments";
+}
+
 function normalizeStoredItem(item) {
   if (!item || typeof item !== "object") {
     return null;
@@ -41,7 +51,7 @@ function normalizeStoredItem(item) {
     createdAt: String(item.createdAt || "").trim(),
     updatedAt: String(item.updatedAt || item.createdAt || "").trim(),
     status: sanitizeStatus(item.status),
-    contentMode: String(item.contentMode || "comments").trim() || "comments",
+    contentMode: sanitizeContentMode(item.contentMode),
     generationMode: String(item.generationMode || "single").trim() || "single",
     personaId: String(item.personaId || "").trim(),
     personaName: String(item.personaName || "").trim(),
@@ -107,14 +117,22 @@ function createSavedOutputsStore({ filePath, logger }) {
     return run;
   }
 
-  async function listItems({ personaId = "", status = "all" } = {}) {
+  async function listItems({ personaId = "", status = "all", contentMode = [] } = {}) {
     const normalizedStatus = String(status || "all").trim().toLowerCase();
     const normalizedPersonaId = String(personaId || "").trim();
+    const normalizedContentModes = Array.isArray(contentMode)
+      ? contentMode
+          .map((value) => sanitizeContentMode(value))
+          .filter(Boolean)
+      : String(contentMode || "").trim()
+        ? [sanitizeContentMode(contentMode)]
+        : [];
     const items = await readAllItems();
 
     return items
       .filter((item) => !normalizedPersonaId || item.personaId === normalizedPersonaId)
       .filter((item) => normalizedStatus === "all" || item.status === normalizedStatus)
+      .filter((item) => !normalizedContentModes.length || normalizedContentModes.includes(item.contentMode))
       .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
   }
 
@@ -136,12 +154,15 @@ function createSavedOutputsStore({ filePath, logger }) {
     }
 
     const now = new Date().toISOString();
+    const normalizedContentMode = sanitizeContentMode(contentMode);
     const sourceLink = String(sourceContext?.redditUrl || redditUrl || "").trim();
     const sharedSourceTitle = String(
-      sourceTitle || sourceContext?.title || (contentMode === "posts" ? sourceTitle : ""),
+      sourceTitle || sourceContext?.title || (normalizedContentMode === "posts" ? sourceTitle : ""),
     ).trim();
     const sharedSourcePreview = trimToLength(
-      contentMode === "posts"
+      normalizedContentMode === "ask-credit"
+        ? "Generated from persona profile."
+        : normalizedContentMode === "posts"
         ? sourcePost
         : sourceContext?.body || postText,
       1200,
@@ -152,7 +173,7 @@ function createSavedOutputsStore({ filePath, logger }) {
       createdAt: now,
       updatedAt: now,
       status: "new",
-      contentMode: String(contentMode || "comments").trim() || "comments",
+      contentMode: normalizedContentMode,
       generationMode: String(generationMode || "single").trim() || "single",
       personaId: String(reply.personaId || persona?.id || personaId || "").trim(),
       personaName: String(reply.personaName || persona?.name || "").trim(),

@@ -12,7 +12,11 @@ const {
 } = require("../infrastructure/openaiResponsesClient");
 const { GenerationQueueError, VALID_JOB_STATUSES } = require("../infrastructure/generationQueue");
 const { SavedOutputsStoreError, VALID_SAVED_STATUSES } = require("../infrastructure/savedOutputsStore");
-const { RequestValidationError, validateGenerateRequest } = require("./validation");
+const {
+  RequestValidationError,
+  VALID_CONTENT_MODES,
+  validateGenerateRequest,
+} = require("./validation");
 const { getPersonaById } = require("../domain/personas");
 
 const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1"])
@@ -285,6 +289,13 @@ function createApp({
 
       const personaId = String(req.query.personaId || "").trim();
       const status = String(req.query.status || "all").trim().toLowerCase() || "all";
+      const contentModeFilter = String(req.query.contentMode || "").trim().toLowerCase();
+      const contentModes = contentModeFilter
+        ? contentModeFilter
+            .split(",")
+            .map((value) => String(value || "").trim().toLowerCase())
+            .filter(Boolean)
+        : [];
 
       if (personaId && personaId !== "all" && !getPersonaById(personaId)) {
         throw new RequestValidationError("personaId filter is invalid.");
@@ -294,9 +305,14 @@ function createApp({
         throw new RequestValidationError("status filter is invalid.");
       }
 
+      if (contentModes.some((mode) => !VALID_CONTENT_MODES.has(mode))) {
+        throw new RequestValidationError("contentMode filter is invalid.");
+      }
+
       const items = await savedOutputsStore.listItems({
         personaId: personaId === "all" ? "" : personaId,
         status,
+        contentMode: contentModes,
       });
 
       return res.json({ items });

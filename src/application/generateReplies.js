@@ -1,4 +1,13 @@
 const {
+  AskCreditContractError,
+  buildAllPersonasAskCreditResponseSchema,
+  buildAllPersonasAskCreditUserPrompt,
+  buildAskCreditUserPrompt,
+  buildSingleAskCreditResponseSchema,
+  normalizeAllPersonasAskCreditQuestions,
+  normalizeGeneratedAskCreditQuestions,
+} = require("../domain/askCreditRules");
+const {
   PostContractError,
   buildAllPersonasPostResponseSchema,
   buildAllPersonasPostUserPrompt,
@@ -17,6 +26,7 @@ const {
   normalizeGeneratedReplies,
 } = require("../domain/replyRules");
 const { PERSONAS, getPersonaById } = require("../domain/personas");
+const { askCreditSystemPrompt } = require("../domain/askCreditSystemPrompt");
 const { postSystemPrompt } = require("../domain/postSystemPrompt");
 const { systemPrompt } = require("../domain/systemPrompt");
 const { SourceContextError, resolveSourceContext } = require("./resolveSourceContext");
@@ -91,6 +101,118 @@ function createGenerationService({ openAiClient, redditPostClient, model, logger
 
     if (!openAiClient?.isConfigured) {
       throw new ConfigurationError("OPENAI_API_KEY is missing.");
+    }
+
+    if (contentMode === "ask-credit") {
+      const persona = getPersonaById(personaId);
+
+      if (!persona) {
+        throw new ConfigurationError("Selected persona is not available.");
+      }
+
+      if (generateAllPersonas) {
+        logger?.info("Generating Ask Credit questions for all personas", {
+          requestId,
+          generation_mode: "all-personas",
+          content_mode: "ask-credit",
+          persona_count: PERSONAS.length,
+          model,
+        });
+
+        const payload = await openAiClient.createStructuredResponse({
+          model,
+          systemPrompt: askCreditSystemPrompt,
+          userPrompt: buildAllPersonasAskCreditUserPrompt({
+            personas: PERSONAS,
+          }),
+          responseSchemaName: "ask_credit_all_personas_questions",
+          responseSchema: buildAllPersonasAskCreditResponseSchema(PERSONAS),
+          maxOutputTokens: 5000,
+          requestId,
+        });
+
+        let replies;
+
+        try {
+          replies = normalizeAllPersonasAskCreditQuestions(payload, {
+            personas: PERSONAS,
+          });
+        } catch (error) {
+          if (error instanceof AskCreditContractError) {
+            throw new InvalidModelResponseError(
+              error.message || "Model response did not match the required Ask Credit contract.",
+            );
+          }
+
+          throw error;
+        }
+
+        if (!replies.length) {
+          throw new EmptyModelResponseError("The model returned an empty response. Try again.");
+        }
+
+        return {
+          replies,
+          model,
+          contentMode: "ask-credit",
+          generationMode: "all-personas",
+          sourceContext: null,
+        };
+      }
+
+      logger?.info("Generating Ask Credit question", {
+        requestId,
+        generation_mode: "single",
+        content_mode: "ask-credit",
+        persona_id: persona.id,
+        persona_name: persona.name,
+        model,
+      });
+
+      const payload = await openAiClient.createStructuredResponse({
+        model,
+        systemPrompt: askCreditSystemPrompt,
+        userPrompt: buildAskCreditUserPrompt({
+          persona,
+          questionCount: 1,
+        }),
+        responseSchemaName: "ask_credit_single_question",
+        responseSchema: buildSingleAskCreditResponseSchema(1),
+        maxOutputTokens: 1200,
+        requestId,
+      });
+
+      let replies;
+
+      try {
+        replies = normalizeGeneratedAskCreditQuestions(payload, {
+          questionCount: 1,
+        });
+      } catch (error) {
+        if (error instanceof AskCreditContractError) {
+          throw new InvalidModelResponseError(
+            error.message || "Model response did not match the required Ask Credit contract.",
+          );
+        }
+
+        throw error;
+      }
+
+      if (!replies.length) {
+        throw new EmptyModelResponseError("The model returned an empty response. Try again.");
+      }
+
+      return {
+        replies,
+        model,
+        contentMode: "ask-credit",
+        generationMode: "single",
+        sourceContext: null,
+        persona: {
+          id: persona.id,
+          name: persona.name,
+        },
+      };
     }
 
     if (contentMode === "posts") {

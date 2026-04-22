@@ -6,7 +6,7 @@ Local-first Node.js web app for generating credit-focused Reddit comments and pe
 
 - Generates one Reddit-ready comment for a selected persona
 - Generates a full batch of 10 comments, one per persona
-- Supports a `Комментарии` mode for replies and a `Посты` mode for post rewrites
+- Supports a `Комментарии` mode for replies, a `Посты` mode for post rewrites, and an `Ask Credit` mode for persona-based credit questions
 - Includes a `Сохраненные` mode with server-side saved outputs shared across devices
 - Supports background queueing so you can add generation jobs without waiting on the page
 - Accepts either pasted text or a Reddit post URL in comment mode
@@ -88,6 +88,12 @@ Key deployment notes:
 - Persists data on the server so it is visible from another computer
 - Includes filters by persona and status
 - Lets you mark each row as `new` or `published`
+
+### Ask Credit
+
+- Generate one Ask Credit question from the selected persona
+- Or generate one question for all 10 personas at once
+- Results are saved server-side and displayed in a copy-friendly table with persona and status filters
 
 ### Background Queue
 

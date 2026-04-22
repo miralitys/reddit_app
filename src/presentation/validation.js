@@ -1,5 +1,10 @@
 const { DEFAULT_PERSONA_ID, getPersonaById } = require("../domain/personas");
 
+const COMMENT_MODE = "comments";
+const POST_MODE = "posts";
+const ASK_CREDIT_MODE = "ask-credit";
+const VALID_CONTENT_MODES = new Set([COMMENT_MODE, POST_MODE, ASK_CREDIT_MODE]);
+
 class RequestValidationError extends Error {
   constructor(message, status = 400) {
     super(message);
@@ -60,7 +65,7 @@ function validateGenerateRequest(body, options = {}) {
     throw new RequestValidationError("promoCreditBooster must be a boolean.");
   }
 
-  const contentMode = String(body.contentMode || "comments").trim().toLowerCase() || "comments";
+  const contentMode = String(body.contentMode || COMMENT_MODE).trim().toLowerCase() || COMMENT_MODE;
   const postText = String(body.postText || "").trim();
   const redditUrl = String(body.redditUrl || "").trim();
   const targetKeyword = String(body.targetKeyword || "").trim();
@@ -71,11 +76,11 @@ function validateGenerateRequest(body, options = {}) {
   const promoCreditClub = body.promoCreditClub === true;
   const promoCreditBooster = body.promoCreditBooster === true;
 
-  if (contentMode !== "comments" && contentMode !== "posts") {
-    throw new RequestValidationError("contentMode must be comments or posts.");
+  if (!VALID_CONTENT_MODES.has(contentMode)) {
+    throw new RequestValidationError("contentMode must be comments, posts, or ask-credit.");
   }
 
-  if (contentMode === "comments") {
+  if (contentMode === COMMENT_MODE) {
     if (!postText && !redditUrl) {
       throw new RequestValidationError("Paste Reddit post text or add a Reddit post URL first.");
     }
@@ -88,7 +93,7 @@ function validateGenerateRequest(body, options = {}) {
     }
   }
 
-  if (contentMode === "posts") {
+  if (contentMode === POST_MODE) {
     if (!targetKeyword) {
       throw new RequestValidationError("Add a target keyword first.");
     }
@@ -113,7 +118,7 @@ function validateGenerateRequest(body, options = {}) {
     throw new RequestValidationError("personaId is invalid.");
   }
 
-  if (contentMode === "comments" && promoCreditClub && promoCreditBooster) {
+  if (contentMode === COMMENT_MODE && promoCreditClub && promoCreditBooster) {
     throw new RequestValidationError(
       "Only one promotional mode can be enabled at a time.",
     );
@@ -128,12 +133,16 @@ function validateGenerateRequest(body, options = {}) {
     sourcePost,
     personaId,
     generateAllPersonas,
-    promoCreditClub: contentMode === "comments" ? promoCreditClub : false,
-    promoCreditBooster: contentMode === "comments" ? promoCreditBooster : false,
+    promoCreditClub: contentMode === COMMENT_MODE ? promoCreditClub : false,
+    promoCreditBooster: contentMode === COMMENT_MODE ? promoCreditBooster : false,
   };
 }
 
 module.exports = {
+  ASK_CREDIT_MODE,
+  COMMENT_MODE,
+  POST_MODE,
   RequestValidationError,
+  VALID_CONTENT_MODES,
   validateGenerateRequest,
 };

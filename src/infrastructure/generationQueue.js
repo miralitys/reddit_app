@@ -45,6 +45,10 @@ function sanitizeRequestPayload(request = {}) {
 }
 
 function buildSourcePreview(request) {
+  if (request.contentMode === "ask-credit") {
+    return "Generated from persona profile.";
+  }
+
   if (request.contentMode === "posts") {
     return trimToLength(`${request.sourceTitle} ${request.sourcePost}`.trim(), 800);
   }

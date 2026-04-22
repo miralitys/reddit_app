@@ -27,6 +27,7 @@
             <span class="badge">Model via .env</span>
             <span class="badge">10 personas</span>
             <span class="badge">Comments and posts</span>
+            <span class="badge">Ask Credit prompts</span>
             <span class="badge">Single or all 10</span>
             <span class="badge">Shared saved library</span>
           </div>
@@ -65,6 +66,7 @@
       <section class="mode-switch" aria-label="Generation modes">
         <button type="button" class="mode-tab is-active" data-mode="comments">Комментарии</button>
         <button type="button" class="mode-tab" data-mode="posts">Посты</button>
+        <button type="button" class="mode-tab" data-mode="ask-credit">Ask Credit</button>
         <button type="button" class="mode-tab" data-mode="saved">Сохраненные</button>
       </section>
 
@@ -161,6 +163,7 @@
               <input
                 id="access-token"
                 name="accessToken"
+                class="shared-access-token-input"
                 type="password"
                 placeholder="Only needed for protected non-loopback access"
                 autocomplete="off"
@@ -259,6 +262,8 @@
           <h2>Saved outputs</h2>
         </div>
 
+        <p id="saved-status" class="status section-status" aria-live="polite"></p>
+
         <div class="saved-controls">
           <label class="field compact-field">
             <span>Persona</span>
@@ -293,6 +298,93 @@
 
         <div id="saved-table-wrap" class="saved-table-wrap empty">
           <p>Здесь будут все сохраненные комментарии и посты, доступные с любого компьютера.</p>
+        </div>
+      </section>
+
+      <section id="ask-credit-section" class="panel saved-panel hidden">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Ask Credit</p>
+            <h2>Persona question generator</h2>
+          </div>
+        </div>
+
+        <p class="lede compact-lede">
+          Generate realistic credit questions from one persona or сразу от всех 10 и копируйте их
+          из таблицы ниже.
+        </p>
+        <p id="ask-credit-status" class="status section-status" aria-live="polite"></p>
+
+        <div class="ask-credit-controls">
+          <label class="field compact-field">
+            <span>Generate from persona</span>
+            <select id="ask-credit-persona">
+              <option value="alex-moreno" selected>Alex Moreno</option>
+              <option value="marina-volk">Marina Volk</option>
+              <option value="daniel-price">Daniel Price</option>
+              <option value="olga-sokolova">Olga Sokolova</option>
+              <option value="kevin-brooks">Kevin Brooks</option>
+              <option value="sophia-grant">Sophia Grant</option>
+              <option value="eric-nolan">Eric Nolan</option>
+              <option value="natalia-reed">Natalia Reed</option>
+              <option value="michael-turner">Michael Turner</option>
+              <option value="jessica-hall">Jessica Hall</option>
+            </select>
+          </label>
+
+          <label class="field compact-field">
+            <span>Access token (optional)</span>
+            <input
+              id="ask-credit-access-token"
+              class="shared-access-token-input"
+              type="password"
+              placeholder="Only needed for protected non-loopback access"
+              autocomplete="off"
+            />
+          </label>
+
+          <div class="saved-actions ask-credit-generate-actions">
+            <button id="ask-credit-generate-button" type="button">Generate question</button>
+            <button id="ask-credit-generate-all-button" type="button" class="ghost">
+              Generate all 10 personas
+            </button>
+          </div>
+        </div>
+
+        <div class="saved-controls">
+          <label class="field compact-field">
+            <span>Persona</span>
+            <select id="ask-credit-persona-filter">
+              <option value="all" selected>Все персонажи</option>
+              <option value="alex-moreno">Alex Moreno</option>
+              <option value="marina-volk">Marina Volk</option>
+              <option value="daniel-price">Daniel Price</option>
+              <option value="olga-sokolova">Olga Sokolova</option>
+              <option value="kevin-brooks">Kevin Brooks</option>
+              <option value="sophia-grant">Sophia Grant</option>
+              <option value="eric-nolan">Eric Nolan</option>
+              <option value="natalia-reed">Natalia Reed</option>
+              <option value="michael-turner">Michael Turner</option>
+              <option value="jessica-hall">Jessica Hall</option>
+            </select>
+          </label>
+
+          <label class="field compact-field">
+            <span>Status</span>
+            <select id="ask-credit-status-filter">
+              <option value="all" selected>Все</option>
+              <option value="new">Новые</option>
+              <option value="published">Опубликованные</option>
+            </select>
+          </label>
+
+          <div class="saved-actions">
+            <button id="refresh-ask-credit-button" type="button" class="ghost">Обновить</button>
+          </div>
+        </div>
+
+        <div id="ask-credit-table-wrap" class="saved-table-wrap empty">
+          <p>Здесь появятся сгенерированные вопросы Ask Credit, которые можно сразу копировать.</p>
         </div>
       </section>
     </main>

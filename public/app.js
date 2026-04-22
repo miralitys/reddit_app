@@ -24,23 +24,34 @@ const modeTabs = Array.from(document.querySelectorAll(".mode-tab"));
 const promoOptions = document.querySelector(".promo-options");
 const generatorSections = document.getElementById("generator-sections");
 const savedSection = document.getElementById("saved-section");
+const savedStatusNode = document.getElementById("saved-status");
 const savedPersonaFilter = document.getElementById("saved-persona-filter");
 const savedStatusFilter = document.getElementById("saved-status-filter");
 const refreshSavedButton = document.getElementById("refresh-saved-button");
 const savedTableWrap = document.getElementById("saved-table-wrap");
-const accessTokenInput = document.getElementById("access-token");
+const askCreditSection = document.getElementById("ask-credit-section");
+const askCreditStatusNode = document.getElementById("ask-credit-status");
+const askCreditPersonaSelect = document.getElementById("ask-credit-persona");
+const askCreditGenerateButton = document.getElementById("ask-credit-generate-button");
+const askCreditGenerateAllButton = document.getElementById("ask-credit-generate-all-button");
+const askCreditPersonaFilter = document.getElementById("ask-credit-persona-filter");
+const askCreditStatusFilter = document.getElementById("ask-credit-status-filter");
+const refreshAskCreditButton = document.getElementById("refresh-ask-credit-button");
+const askCreditTableWrap = document.getElementById("ask-credit-table-wrap");
+const accessTokenInputs = Array.from(document.querySelectorAll(".shared-access-token-input"));
 
 const HISTORY_KEY = "reddit-commentator-history";
 const HISTORY_LIMIT = 8;
 const COMMENT_MODE = "comments";
 const POST_MODE = "posts";
+const ASK_CREDIT_MODE = "ask-credit";
 const SAVED_MODE = "saved";
 const QUEUE_POLL_INTERVAL_MS = 5000;
 
 let queuePollTimer = null;
 
 function getSafeContentMode(value) {
-  if (value === POST_MODE || value === SAVED_MODE) {
+  if (value === POST_MODE || value === SAVED_MODE || value === ASK_CREDIT_MODE) {
     return value;
   }
 
@@ -106,12 +117,33 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function setStatus(message) {
-  statusNode.textContent = message;
+function getStatusNode(mode = contentModeInput.value) {
+  const safeMode = getSafeContentMode(mode);
+
+  if (safeMode === ASK_CREDIT_MODE && askCreditStatusNode) {
+    return askCreditStatusNode;
+  }
+
+  if (safeMode === SAVED_MODE && savedStatusNode) {
+    return savedStatusNode;
+  }
+
+  return statusNode;
+}
+
+function setStatus(message, mode = contentModeInput.value) {
+  const nextMessage = String(message || "");
+  [statusNode, savedStatusNode, askCreditStatusNode]
+    .filter(Boolean)
+    .forEach((node) => {
+      node.textContent = node === getStatusNode(mode) ? nextMessage : "";
+    });
 }
 
 function getAccessToken() {
-  return String(accessTokenInput?.value || "").trim();
+  return accessTokenInputs
+    .map((input) => String(input?.value || "").trim())
+    .find(Boolean) || "";
 }
 
 function buildJsonHeaders() {
@@ -120,6 +152,20 @@ function buildJsonHeaders() {
     "Content-Type": "application/json",
     ...(accessToken ? { "x-app-access-token": accessToken } : {}),
   };
+}
+
+function getContentModeLabel(contentMode) {
+  const safeMode = getSafeContentMode(contentMode);
+
+  if (safeMode === POST_MODE) {
+    return "Посты";
+  }
+
+  if (safeMode === ASK_CREDIT_MODE) {
+    return "Ask Credit";
+  }
+
+  return "Комментарии";
 }
 
 async function copyText(text) {
@@ -190,9 +236,12 @@ function formatDate(value) {
 }
 
 function formatOutputCount(count, contentMode) {
-  const noun = getSafeContentMode(contentMode) === POST_MODE
+  const safeMode = getSafeContentMode(contentMode);
+  const noun = safeMode === POST_MODE
     ? count === 1 ? "post" : "posts"
-    : count === 1 ? "comment" : "comments";
+    : safeMode === ASK_CREDIT_MODE
+      ? count === 1 ? "question" : "questions"
+      : count === 1 ? "comment" : "comments";
   return `${count} ${noun}`;
 }
 
@@ -235,6 +284,24 @@ function getModeConfig(mode) {
       generatingAll: "",
       successSingle: "",
       successAll: "",
+    };
+  }
+
+  if (getSafeContentMode(mode) === ASK_CREDIT_MODE) {
+    return {
+      formKicker: "Ask Credit",
+      formTitle: "Persona Questions",
+      outputKicker: "Ask Credit",
+      outputTitle: "Generated questions",
+      submitLabel: "Generate question",
+      submitAllLabel: "Generate all 10 personas",
+      queueLabel: "Add question to queue",
+      queueAllLabel: "Queue all 10 personas",
+      emptyResults: "Your Ask Credit questions will appear here.",
+      generatingSingle: "Generating Ask Credit question...",
+      generatingAll: "Generating Ask Credit questions for all personas...",
+      successSingle: "Ask Credit question generated.",
+      successAll: "All 10 Ask Credit questions generated.",
     };
   }
 
@@ -309,7 +376,15 @@ function getOutputDisplayLabel(output, index, entry = null) {
   }
 
   if (!output?.personaName && entry?.generationMode !== "all-personas") {
-    return getSafeContentMode(entry?.contentMode) === POST_MODE ? "Post" : "Comment";
+    if (getSafeContentMode(entry?.contentMode) === POST_MODE) {
+      return "Post";
+    }
+
+    if (getSafeContentMode(entry?.contentMode) === ASK_CREDIT_MODE) {
+      return "Question";
+    }
+
+    return "Comment";
   }
 
   return `Output ${index + 1}`;
@@ -338,6 +413,10 @@ function getHistorySnippet(entry) {
     return `${titlePart} ${bodyPart}`.trim().slice(0, 180);
   }
 
+  if (getSafeContentMode(entry.contentMode) === ASK_CREDIT_MODE) {
+    return `${entry.replies?.[0]?.text || ""}`.trim().slice(0, 180);
+  }
+
   return `${entry.postText || ""}`.trim().slice(0, 180);
 }
 
@@ -353,9 +432,11 @@ function setContentMode(mode, options = {}) {
   });
 
   const isSavedMode = safeMode === SAVED_MODE;
+  const isAskCreditMode = safeMode === ASK_CREDIT_MODE;
 
-  generatorSections.classList.toggle("hidden", isSavedMode);
+  generatorSections.classList.toggle("hidden", isSavedMode || isAskCreditMode);
   savedSection.classList.toggle("hidden", !isSavedMode);
+  askCreditSection.classList.toggle("hidden", !isAskCreditMode);
   commentFields.classList.toggle("hidden", safeMode !== COMMENT_MODE);
   postFields.classList.toggle("hidden", safeMode !== POST_MODE);
   promoOptions.classList.toggle("hidden", safeMode !== COMMENT_MODE);
@@ -371,14 +452,21 @@ function setContentMode(mode, options = {}) {
 
   renderSourceContext(null, safeMode);
 
-  if (shouldResetOutput && !isSavedMode) {
+  if (shouldResetOutput && !isSavedMode && !isAskCreditMode) {
     renderEmpty(config.emptyResults);
-    setStatus("");
   }
 
   if (isSavedMode) {
     loadSavedItems();
+    return;
   }
+
+  if (isAskCreditMode) {
+    loadAskCreditItems();
+    return;
+  }
+
+  setStatus("", safeMode);
 }
 
 function collectPayload(generationMode) {
@@ -454,13 +542,25 @@ function renderHistory() {
     const modeLabel = sanitizedEntry.generationMode === "all-personas" ? "All personas" : personaLabel;
     const sourceTag = contentMode === POST_MODE
       ? "Посты"
+      : contentMode === ASK_CREDIT_MODE
+        ? "Persona profile"
       : sanitizedEntry.redditUrl
         ? "Reddit URL"
         : "Manual text";
+    const historyCopyLabel = contentMode === POST_MODE
+      ? "posts"
+      : contentMode === ASK_CREDIT_MODE
+        ? "questions"
+        : "replies";
+    const historyCopiedLabel = contentMode === POST_MODE
+      ? "Posts"
+      : contentMode === ASK_CREDIT_MODE
+        ? "Questions"
+        : "Replies";
 
     card.innerHTML = `
       <div class="history-meta">
-        <span class="history-tag">${escapeHtml(contentMode === POST_MODE ? "Посты" : "Комментарии")}</span>
+        <span class="history-tag">${escapeHtml(getContentModeLabel(contentMode))}</span>
         <span class="history-tag">${escapeHtml(modeLabel)}</span>
         <span class="history-tag">${escapeHtml(sourceTag)}</span>
         <span class="history-tag">${escapeHtml(formatOutputCount((sanitizedEntry.replies || []).length || 0, contentMode))}</span>
@@ -472,14 +572,17 @@ function renderHistory() {
       <p class="history-snippet">${escapeHtml(snippet)}${snippet.length >= 180 ? "..." : ""}</p>
       <div class="history-replies">${repliesMarkup}</div>
       <div class="history-actions">
-        <button type="button" class="ghost use-history-button">Use again</button>
-        <button type="button" class="ghost copy-history-button">Copy ${contentMode === POST_MODE ? "posts" : "replies"}</button>
+        ${contentMode === ASK_CREDIT_MODE ? "" : '<button type="button" class="ghost use-history-button">Use again</button>'}
+        <button type="button" class="ghost copy-history-button">Copy ${historyCopyLabel}</button>
       </div>
     `;
 
-    card.querySelector(".use-history-button").addEventListener("click", () => {
-      fillFormFromEntry(sanitizedEntry);
-    });
+    const useHistoryButton = card.querySelector(".use-history-button");
+    if (useHistoryButton) {
+      useHistoryButton.addEventListener("click", () => {
+        fillFormFromEntry(sanitizedEntry);
+      });
+    }
 
     card.querySelector(".copy-history-button").addEventListener("click", async (event) => {
       try {
@@ -495,7 +598,7 @@ function renderHistory() {
           .join("\n\n");
         await copyText(combinedOutputs);
         flashCopied(event.currentTarget, "Copied");
-        setStatus(`${contentMode === POST_MODE ? "Posts" : "Replies"} from history copied.`);
+        setStatus(`${historyCopiedLabel} from history copied.`);
       } catch (error) {
         setStatus(error.message || "Copy failed.");
       }
@@ -555,6 +658,8 @@ function renderOutputs(outputs, contentMode = contentModeInput.value, generation
       ? `Copy ${labelText}`
       : safeMode === POST_MODE
         ? "Copy post"
+        : safeMode === ASK_CREDIT_MODE
+          ? "Copy question"
         : "Copy comment";
     copyButton.addEventListener("click", async (event) => {
       try {
@@ -608,6 +713,10 @@ function getQueueJobSnippet(job) {
     return job.sourceTitle || job.sourcePreview || "Queued post rewrite";
   }
 
+  if (job.contentMode === ASK_CREDIT_MODE) {
+    return job.sourcePreview || "Queued Ask Credit question";
+  }
+
   return job.sourcePreview || job.sourceLink || "Queued comment generation";
 }
 
@@ -636,7 +745,7 @@ function renderQueueJobs(jobs) {
     card.innerHTML = `
       <div class="history-meta">
         <span class="history-tag queue-status queue-status-${escapeHtml(job.status)}">${escapeHtml(formatQueueStatus(job.status))}</span>
-        <span class="history-tag">${escapeHtml(job.contentMode === POST_MODE ? "Посты" : "Комментарии")}</span>
+        <span class="history-tag">${escapeHtml(getContentModeLabel(job.contentMode))}</span>
         <span class="history-tag">${escapeHtml(personaLabel)}</span>
         <span class="history-tag">${escapeHtml(formatDate(job.createdAt))}</span>
         ${job.targetKeyword ? `<span class="history-tag">${escapeHtml(job.targetKeyword)}</span>` : ""}
@@ -661,9 +770,9 @@ function renderQueueJobs(jobs) {
   });
 }
 
-function renderSavedEmpty(message) {
-  savedTableWrap.classList.add("empty");
-  savedTableWrap.innerHTML = `<p>${escapeHtml(message)}</p>`;
+function renderSavedEmpty(container, message) {
+  container.classList.add("empty");
+  container.innerHTML = `<p>${escapeHtml(message)}</p>`;
 }
 
 function buildSavedSourceMarkup(item) {
@@ -685,7 +794,11 @@ function buildSavedOutputMarkup(item) {
   const titleMarkup = item.outputTitle
     ? `<div class="saved-output-title">${escapeHtml(item.outputTitle)}</div>`
     : "";
-  const buttonLabel = item.contentMode === POST_MODE ? "Скопировать пост" : "Скопировать комментарий";
+  const buttonLabel = item.contentMode === POST_MODE
+    ? "Скопировать пост"
+    : item.contentMode === ASK_CREDIT_MODE
+      ? "Скопировать вопрос"
+      : "Скопировать комментарий";
 
   return `
     ${titleMarkup}
@@ -696,16 +809,31 @@ function buildSavedOutputMarkup(item) {
   `;
 }
 
-function renderSavedTable(items) {
+function getCopiedStatusMessage(contentMode) {
+  if (contentMode === POST_MODE) {
+    return "Пост скопирован.";
+  }
+
+  if (contentMode === ASK_CREDIT_MODE) {
+    return "Вопрос скопирован.";
+  }
+
+  return "Комментарий скопирован.";
+}
+
+function renderSavedTable(container, items, options = {}) {
   const normalizedItems = Array.isArray(items) ? items.map(sanitizeSavedItem) : [];
+  const statusFilterNode = options.statusFilterNode || null;
+  const reload = typeof options.reload === "function" ? options.reload : null;
+  const statusMode = options.statusMode || contentModeInput.value;
 
   if (!normalizedItems.length) {
-    renderSavedEmpty("По текущим фильтрам ничего не найдено.");
+    renderSavedEmpty(container, options.emptyMessage || "По текущим фильтрам ничего не найдено.");
     return;
   }
 
-  savedTableWrap.classList.remove("empty");
-  savedTableWrap.innerHTML = `
+  container.classList.remove("empty");
+  container.innerHTML = `
     <div class="saved-record-list">
       ${normalizedItems
         .map(
@@ -721,7 +849,7 @@ function renderSavedTable(items) {
                     <span class="saved-meta-label">Персонаж</span>
                     <span class="saved-persona-name">${escapeHtml(item.personaName || getPersonaLabel(item.personaId))}</span>
                   </div>
-                  <span class="saved-type">${escapeHtml(item.contentMode === POST_MODE ? "Посты" : "Комментарии")}</span>
+                  <span class="saved-type">${escapeHtml(getContentModeLabel(item.contentMode))}</span>
                 </div>
                 <div class="saved-status-block">
                   <span class="saved-meta-label">Статус</span>
@@ -749,7 +877,7 @@ function renderSavedTable(items) {
     </div>
   `;
 
-  savedTableWrap.querySelectorAll(".saved-status-select").forEach((select) => {
+  container.querySelectorAll(".saved-status-select").forEach((select) => {
     select.addEventListener("change", async (event) => {
       const target = event.currentTarget;
       const originalValue = target.dataset.currentValue || target.defaultValue || "new";
@@ -771,13 +899,13 @@ function renderSavedTable(items) {
 
         target.dataset.currentValue = nextValue;
         target.defaultValue = nextValue;
-        if ((savedStatusFilter.value || "all") !== "all" && savedStatusFilter.value !== nextValue) {
-          await loadSavedItems({ silentStatus: true });
+        if (statusFilterNode && (statusFilterNode.value || "all") !== "all" && statusFilterNode.value !== nextValue) {
+          await reload?.({ silentStatus: true });
         }
-        setStatus("Статус сохраненной записи обновлен.");
+        setStatus("Статус сохраненной записи обновлен.", statusMode);
       } catch (error) {
         target.value = originalValue;
-        setStatus(error.message || "Не удалось обновить статус.");
+        setStatus(error.message || "Не удалось обновить статус.", statusMode);
       } finally {
         target.disabled = false;
       }
@@ -786,7 +914,7 @@ function renderSavedTable(items) {
     select.dataset.currentValue = select.value;
   });
 
-  savedTableWrap.querySelectorAll(".saved-copy-button").forEach((button) => {
+  container.querySelectorAll(".saved-copy-button").forEach((button) => {
     button.addEventListener("click", async (event) => {
       const target = event.currentTarget;
       const card = target.closest(".saved-record");
@@ -794,7 +922,7 @@ function renderSavedTable(items) {
       const item = normalizedItems.find((candidate) => candidate.id === savedId);
 
       if (!item) {
-        setStatus("Не удалось найти текст для копирования.");
+        setStatus("Не удалось найти текст для копирования.", statusMode);
         return;
       }
 
@@ -804,23 +932,24 @@ function renderSavedTable(items) {
           : String(item.outputText || "");
         await copyText(textToCopy);
         flashCopied(target, "Скопировано");
-        setStatus(item.contentMode === POST_MODE ? "Пост скопирован." : "Комментарий скопирован.");
+        setStatus(getCopiedStatusMessage(item.contentMode), statusMode);
       } catch (error) {
-        setStatus(error.message || "Копирование не сработало.");
+        setStatus(error.message || "Копирование не сработало.", statusMode);
       }
     });
   });
 }
 
-async function loadSavedItems(options = {}) {
+async function loadLibraryItems(config, options = {}) {
   const silentStatus = Boolean(options.silentStatus);
-  savedTableWrap.classList.add("empty");
-  savedTableWrap.innerHTML = "<p>Загружаю сохраненные записи...</p>";
+  config.wrapNode.classList.add("empty");
+  config.wrapNode.innerHTML = `<p>${escapeHtml(config.loadingMessage)}</p>`;
 
   try {
     const query = new URLSearchParams();
-    query.set("personaId", savedPersonaFilter.value || "all");
-    query.set("status", savedStatusFilter.value || "all");
+    query.set("personaId", config.personaFilterNode.value || "all");
+    query.set("status", config.statusFilterNode.value || "all");
+    query.set("contentMode", config.contentMode);
 
     const response = await fetch(`/api/saved?${query.toString()}`, {
       headers: getAccessToken() ? { "x-app-access-token": getAccessToken() } : {},
@@ -828,19 +957,54 @@ async function loadSavedItems(options = {}) {
     const data = await readJsonResponse(response);
 
     if (!response.ok) {
-      throw new Error(data?.error || "Не удалось загрузить сохраненные записи.");
+      throw new Error(data?.error || config.failureMessage);
     }
 
-    renderSavedTable(data?.items || []);
+    renderSavedTable(config.wrapNode, data?.items || [], {
+      emptyMessage: config.emptyMessage,
+      reload: config.reload,
+      statusFilterNode: config.statusFilterNode,
+      statusMode: config.statusMode,
+    });
     if (!silentStatus) {
-      setStatus("Сохраненные записи загружены.");
+      setStatus(config.successMessage, config.statusMode);
     }
   } catch (error) {
-    renderSavedEmpty(error.message || "Не удалось загрузить сохраненные записи.");
+    renderSavedEmpty(config.wrapNode, error.message || config.failureMessage);
     if (!silentStatus) {
-      setStatus("Не удалось загрузить сохраненные записи.");
+      setStatus(config.failureMessage, config.statusMode);
     }
   }
+}
+
+async function loadSavedItems(options = {}) {
+  return loadLibraryItems({
+    wrapNode: savedTableWrap,
+    personaFilterNode: savedPersonaFilter,
+    statusFilterNode: savedStatusFilter,
+    contentMode: `${COMMENT_MODE},${POST_MODE}`,
+    loadingMessage: "Загружаю сохраненные записи...",
+    successMessage: "Сохраненные записи загружены.",
+    failureMessage: "Не удалось загрузить сохраненные записи.",
+    emptyMessage: "По текущим фильтрам ничего не найдено.",
+    reload: loadSavedItems,
+    statusMode: SAVED_MODE,
+  }, options);
+}
+
+async function loadAskCreditItems(options = {}) {
+  return loadLibraryItems({
+    wrapNode: askCreditTableWrap,
+    personaFilterNode: askCreditPersonaFilter,
+    statusFilterNode: askCreditStatusFilter,
+    contentMode: ASK_CREDIT_MODE,
+    loadingMessage: "Загружаю вопросы Ask Credit...",
+    successMessage: "Вопросы Ask Credit загружены.",
+    failureMessage: "Не удалось загрузить вопросы Ask Credit.",
+    emptyMessage: "По текущим фильтрам нет вопросов Ask Credit.",
+    reload: loadAskCreditItems,
+    statusMode: ASK_CREDIT_MODE,
+  }, options);
 }
 
 async function loadQueueJobs(options = {}) {
@@ -894,6 +1058,82 @@ async function enqueueGeneration(generationMode) {
   }
 }
 
+function syncAccessTokenInputs(changedInput) {
+  const nextValue = String(changedInput?.value || "");
+
+  accessTokenInputs.forEach((input) => {
+    if (input !== changedInput && input.value !== nextValue) {
+      input.value = nextValue;
+    }
+  });
+}
+
+function buildAskCreditPayload(generationMode) {
+  return {
+    contentMode: ASK_CREDIT_MODE,
+    personaId: askCreditPersonaSelect.value || "alex-moreno",
+    generateAllPersonas: generationMode === "all-personas",
+  };
+}
+
+async function generateAskCredit(generationMode) {
+  const payload = buildAskCreditPayload(generationMode);
+
+  askCreditGenerateButton.disabled = true;
+  askCreditGenerateAllButton.disabled = true;
+  askCreditTableWrap.classList.add("empty");
+  askCreditTableWrap.innerHTML = `<p>${escapeHtml(
+    generationMode === "all-personas"
+      ? "Generating Ask Credit questions for all 10 personas..."
+      : "Generating Ask Credit question...",
+  )}</p>`;
+
+  setStatus(
+    generationMode === "all-personas"
+      ? "Generating Ask Credit questions for all 10 personas..."
+      : `Generating Ask Credit question for ${getPersonaLabel(payload.personaId)}...`,
+    ASK_CREDIT_MODE,
+  );
+
+  try {
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: buildJsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await readJsonResponse(response);
+
+    if (!response.ok) {
+      throw new Error(data?.error || "Не удалось сгенерировать вопрос Ask Credit.");
+    }
+
+    askCreditPersonaFilter.value = generationMode === "all-personas" ? "all" : payload.personaId;
+    if ((askCreditStatusFilter.value || "all") === "published") {
+      askCreditStatusFilter.value = "all";
+    }
+
+    await loadAskCreditItems({ silentStatus: true });
+    const saveSuffix = data?.savedItemsError
+      ? " Сохранение в общую библиотеку не сработало."
+      : data?.savedItemsCount > 0
+        ? " Сразу добавлено в таблицу ниже."
+        : "";
+
+    setStatus(
+      generationMode === "all-personas"
+        ? `Вопросы Ask Credit для всех 10 персонажей готовы.${saveSuffix}`
+        : `Вопрос Ask Credit для ${getPersonaLabel(payload.personaId)} готов.${saveSuffix}`,
+      ASK_CREDIT_MODE,
+    );
+  } catch (error) {
+    renderSavedEmpty(askCreditTableWrap, error.message || "Не удалось сгенерировать вопрос Ask Credit.");
+    setStatus(error.message || "Не удалось сгенерировать вопрос Ask Credit.", ASK_CREDIT_MODE);
+  } finally {
+    askCreditGenerateButton.disabled = false;
+    askCreditGenerateAllButton.disabled = false;
+  }
+}
+
 function startQueuePolling() {
   if (queuePollTimer) {
     window.clearInterval(queuePollTimer);
@@ -943,6 +1183,12 @@ promoCreditBoosterCheckbox.addEventListener("change", () => {
   syncPromoSelection(promoCreditBoosterCheckbox, promoCreditClubCheckbox);
 });
 
+accessTokenInputs.forEach((input) => {
+  input.addEventListener("input", (event) => {
+    syncAccessTokenInputs(event.currentTarget);
+  });
+});
+
 modeTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     setContentMode(tab.dataset.mode);
@@ -965,6 +1211,22 @@ refreshSavedButton.addEventListener("click", () => {
   loadSavedItems();
 });
 
+askCreditPersonaFilter.addEventListener("change", () => {
+  if (getSafeContentMode(contentModeInput.value) === ASK_CREDIT_MODE) {
+    loadAskCreditItems();
+  }
+});
+
+askCreditStatusFilter.addEventListener("change", () => {
+  if (getSafeContentMode(contentModeInput.value) === ASK_CREDIT_MODE) {
+    loadAskCreditItems();
+  }
+});
+
+refreshAskCreditButton.addEventListener("click", () => {
+  loadAskCreditItems();
+});
+
 refreshQueueButton.addEventListener("click", () => {
   loadQueueJobs();
 });
@@ -975,6 +1237,14 @@ queueButton.addEventListener("click", () => {
 
 queueAllButton.addEventListener("click", () => {
   enqueueGeneration("all-personas");
+});
+
+askCreditGenerateButton.addEventListener("click", () => {
+  generateAskCredit("single");
+});
+
+askCreditGenerateAllButton.addEventListener("click", () => {
+  generateAskCredit("all-personas");
 });
 
 form.addEventListener("submit", async (event) => {
