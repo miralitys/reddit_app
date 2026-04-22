@@ -15,6 +15,7 @@ const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 12
 const DEFAULT_MAX_POST_TEXT_CHARS = 12000
 const DEFAULT_ALLOW_REMOTE_ACCESS = false
 const DEFAULT_SAVED_GENERATIONS_FILE = path.resolve(__dirname, "..", "data", "saved-generations.json")
+const DEFAULT_GENERATION_QUEUE_FILE = path.resolve(__dirname, "..", "data", "generation-queue.json")
 
 function readPositiveInteger(value, fallback) {
   const parsed = Number.parseInt(String(value || ""), 10);
@@ -115,6 +116,9 @@ function loadConfig(optionsOrEnv = process.env) {
     savedGenerationsFile:
       String(env.SAVED_GENERATIONS_FILE || DEFAULT_SAVED_GENERATIONS_FILE).trim() ||
       DEFAULT_SAVED_GENERATIONS_FILE,
+    generationQueueFile:
+      String(env.GENERATION_QUEUE_FILE || DEFAULT_GENERATION_QUEUE_FILE).trim() ||
+      DEFAULT_GENERATION_QUEUE_FILE,
     rateLimitWindowMs: readPositiveInteger(
       env.RATE_LIMIT_WINDOW_MS,
       DEFAULT_RATE_LIMIT_WINDOW_MS,

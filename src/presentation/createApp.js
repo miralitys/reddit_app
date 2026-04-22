@@ -10,6 +10,7 @@ const {
   OpenAIResponseError,
   withOpenAIRequestContext,
 } = require("../infrastructure/openaiResponsesClient");
+const { GenerationQueueError, VALID_JOB_STATUSES } = require("../infrastructure/generationQueue");
 const { SavedOutputsStoreError, VALID_SAVED_STATUSES } = require("../infrastructure/savedOutputsStore");
 const { RequestValidationError, validateGenerateRequest } = require("./validation");
 const { getPersonaById } = require("../domain/personas");
@@ -115,6 +116,14 @@ function getPublicErrorDetails(error) {
     }
   }
 
+  if (error instanceof GenerationQueueError) {
+    return {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+    }
+  }
+
   if (error instanceof OpenAIResponseError) {
     if (error.status === 499) {
       return {
@@ -180,6 +189,7 @@ function getPublicErrorDetails(error) {
 
 function createApp({
   generationService,
+  generationQueue = null,
   logger,
   model,
   publicDir,
@@ -294,6 +304,96 @@ function createApp({
       const publicError = getPublicErrorDetails(error)
 
       logger?.error("Saved list request failed", {
+        requestId: req.requestId,
+        status: publicError.status,
+        error_code: error?.name || "Error",
+        public_error_code: publicError.code,
+        message: error?.message || "Unexpected server error.",
+      });
+
+      return res.status(publicError.status).json({
+        error: publicError.message,
+        code: publicError.code,
+        requestId: req.requestId,
+      });
+    }
+  })
+
+  app.get("/api/queue", async (req, res) => {
+    try {
+      assertAllowedRequest(req)
+
+      if (!generationQueue) {
+        throw new GenerationQueueError("Generation queue is not configured.", {
+          status: 503,
+          code: "generation_queue_unavailable",
+        })
+      }
+
+      const status = String(req.query.status || "all").trim().toLowerCase() || "all";
+      const limit = Number.parseInt(String(req.query.limit || "30"), 10);
+
+      if (status !== "all" && !VALID_JOB_STATUSES.has(status)) {
+        throw new RequestValidationError("queue status filter is invalid.");
+      }
+
+      const jobs = await generationQueue.listJobs({
+        status,
+        limit,
+      });
+
+      return res.json({ jobs });
+    } catch (error) {
+      const publicError = getPublicErrorDetails(error)
+
+      logger?.error("Queue list request failed", {
+        requestId: req.requestId,
+        status: publicError.status,
+        error_code: error?.name || "Error",
+        public_error_code: publicError.code,
+        message: error?.message || "Unexpected server error.",
+      });
+
+      return res.status(publicError.status).json({
+        error: publicError.message,
+        code: publicError.code,
+        requestId: req.requestId,
+      });
+    }
+  })
+
+  app.post("/api/generate-async", async (req, res) => {
+    try {
+      assertAllowedRequest(req)
+
+      if (!generationQueue) {
+        throw new GenerationQueueError("Generation queue is not configured.", {
+          status: 503,
+          code: "generation_queue_unavailable",
+        })
+      }
+
+      if (!rateLimiter.consume(normalizeRemoteAddress(req.socket?.remoteAddress) || "unknown")) {
+        throw new HttpRequestError("Too many generation attempts. Please wait a moment.", {
+          status: 429,
+          code: "rate_limited",
+        })
+      }
+
+      const payload = validateGenerateRequest(req.body, {
+        maxPostTextChars,
+      });
+      const persona = payload.generateAllPersonas ? null : getPersonaById(payload.personaId);
+      const job = await generationQueue.enqueue(payload, persona);
+
+      return res.status(202).json({
+        ok: true,
+        job,
+      });
+    } catch (error) {
+      const publicError = getPublicErrorDetails(error)
+
+      logger?.error("Async generate request failed", {
         requestId: req.requestId,
         status: publicError.status,
         error_code: error?.name || "Error",

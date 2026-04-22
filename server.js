@@ -6,6 +6,7 @@ const {
   createOpenAIResponsesClient,
 } = require("./src/infrastructure/openaiResponsesClient");
 const { createRedditPostClient } = require("./src/infrastructure/redditPostClient");
+const { createGenerationQueue } = require("./src/infrastructure/generationQueue");
 const { createSavedOutputsStore } = require("./src/infrastructure/savedOutputsStore");
 const { createApp } = require("./src/presentation/createApp");
 const { createLogger } = require("./src/shared/logger");
@@ -30,9 +31,16 @@ const generationService = createGenerationService({
   model: config.openAiModel,
   logger,
 });
+const generationQueue = createGenerationQueue({
+  filePath: config.generationQueueFile,
+  generationService,
+  savedOutputsStore,
+  logger,
+});
 
 const app = createApp({
   generationService,
+  generationQueue,
   logger,
   model: config.openAiModel,
   publicDir: path.join(__dirname, "public"),
@@ -45,6 +53,12 @@ const app = createApp({
   rateLimitWindowMs: config.rateLimitWindowMs,
   rateLimitMaxRequests: config.rateLimitMaxRequests,
   openAiConfigured: Boolean(config.openAiApiKey),
+});
+
+void generationQueue.start().catch((error) => {
+  logger.error("Generation queue failed to start", {
+    message: error?.message || "Unknown error",
+  });
 });
 
 if (require.main === module) {

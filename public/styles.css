@@ -414,6 +414,10 @@ input:focus {
   gap: 10px;
 }
 
+.action-buttons button {
+  flex: 0 0 auto;
+}
+
 button {
   border: 0;
   border-radius: 999px;
@@ -611,6 +615,48 @@ button[type="submit"]:disabled,
   padding: 10px 14px;
 }
 
+.queue-panel {
+  margin-top: 22px;
+}
+
+.queue-job-card .history-actions {
+  justify-content: flex-start;
+}
+
+.queue-source-link {
+  margin-top: 6px;
+}
+
+.queue-error {
+  margin: 10px 0 0;
+  color: #c2410c;
+  line-height: 1.6;
+}
+
+.queue-status-queued {
+  border-color: rgba(59, 130, 246, 0.14);
+  background: rgba(59, 130, 246, 0.08);
+  color: #2563eb;
+}
+
+.queue-status-processing {
+  border-color: rgba(245, 158, 11, 0.14);
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
+
+.queue-status-completed {
+  border-color: rgba(16, 185, 129, 0.14);
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.queue-status-failed {
+  border-color: rgba(239, 68, 68, 0.14);
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
 .history-meta {
   display: flex;
   flex-wrap: wrap;
@@ -781,6 +827,14 @@ button[type="submit"]:disabled,
 
 .saved-output-text {
   white-space: pre-wrap;
+}
+
+.saved-output-actions {
+  margin-top: 14px;
+}
+
+.saved-output-actions .ghost {
+  padding: 10px 14px;
 }
 
 .saved-status-select {

@@ -15,6 +15,10 @@ services:
         value: "true"
       - key: HOST
         value: 0.0.0.0
+      - key: SAVED_GENERATIONS_FILE
+        value: /var/data/saved-generations.json
+      - key: GENERATION_QUEUE_FILE
+        value: /var/data/generation-queue.json
       - key: MAX_POST_TEXT_CHARS
         value: "12000"
       - key: MAX_CONCURRENT_GENERATIONS

@@ -3,9 +3,13 @@ const results = document.getElementById("results");
 const statusNode = document.getElementById("status");
 const submitButton = document.getElementById("submit-button");
 const submitAllButton = document.getElementById("submit-all-button");
+const queueButton = document.getElementById("queue-button");
+const queueAllButton = document.getElementById("queue-all-button");
 const clearHistoryButton = document.getElementById("clear-history-button");
 const historyNode = document.getElementById("history");
 const sourceContextNode = document.getElementById("source-context");
+const queueJobsNode = document.getElementById("queue-jobs");
+const refreshQueueButton = document.getElementById("refresh-queue-button");
 const personaSelect = document.getElementById("persona");
 const promoCreditClubCheckbox = document.getElementById("promo-credit-club");
 const promoCreditBoosterCheckbox = document.getElementById("promo-credit-booster");
@@ -31,6 +35,9 @@ const HISTORY_LIMIT = 8;
 const COMMENT_MODE = "comments";
 const POST_MODE = "posts";
 const SAVED_MODE = "saved";
+const QUEUE_POLL_INTERVAL_MS = 5000;
+
+let queuePollTimer = null;
 
 function getSafeContentMode(value) {
   if (value === POST_MODE || value === SAVED_MODE) {
@@ -203,6 +210,8 @@ function getModeConfig(mode) {
       outputTitle: "Generated posts",
       submitLabel: "Generate post",
       submitAllLabel: "Generate all 10 persona posts",
+      queueLabel: "Add post to queue",
+      queueAllLabel: "Queue all 10 persona posts",
       emptyResults: "Your rewritten post or full persona post batch will appear here.",
       generatingSingle: "Generating post...",
       generatingAll: "Generating 10 persona posts...",
@@ -219,6 +228,8 @@ function getModeConfig(mode) {
       outputTitle: "Saved outputs",
       submitLabel: "Generate comment",
       submitAllLabel: "Generate all 10 personas",
+      queueLabel: "Add comment to queue",
+      queueAllLabel: "Queue all 10 personas",
       emptyResults: "Your shared saved outputs will appear here.",
       generatingSingle: "",
       generatingAll: "",
@@ -234,6 +245,8 @@ function getModeConfig(mode) {
     outputTitle: "Generated comments",
     submitLabel: "Generate comment",
     submitAllLabel: "Generate all 10 personas",
+    queueLabel: "Add comment to queue",
+    queueAllLabel: "Queue all 10 personas",
     emptyResults: "Your Reddit-ready comment or full persona batch will appear here.",
     generatingSingle: "Generating comment...",
     generatingAll: "Generating all 10 personas...",
@@ -353,6 +366,8 @@ function setContentMode(mode, options = {}) {
   outputTitle.textContent = config.outputTitle;
   submitButton.textContent = config.submitLabel;
   submitAllButton.textContent = config.submitAllLabel;
+  queueButton.textContent = config.queueLabel;
+  queueAllButton.textContent = config.queueAllLabel;
 
   renderSourceContext(null, safeMode);
 
@@ -364,6 +379,24 @@ function setContentMode(mode, options = {}) {
   if (isSavedMode) {
     loadSavedItems();
   }
+}
+
+function collectPayload(generationMode) {
+  const formData = new FormData(form);
+  const contentMode = getSafeContentMode(formData.get("contentMode"));
+
+  return {
+    contentMode,
+    postText: formData.get("postText"),
+    redditUrl: formData.get("redditUrl"),
+    targetKeyword: formData.get("targetKeyword"),
+    sourceTitle: formData.get("sourceTitle"),
+    sourcePost: formData.get("sourcePost"),
+    personaId: formData.get("personaId"),
+    promoCreditClub: contentMode === COMMENT_MODE && formData.get("promoCreditClub") === "on",
+    promoCreditBooster: contentMode === COMMENT_MODE && formData.get("promoCreditBooster") === "on",
+    generateAllPersonas: generationMode === "all-personas",
+  };
 }
 
 function fillFormFromEntry(entry) {
@@ -547,6 +580,87 @@ function renderEmpty(message) {
   results.append(text);
 }
 
+function renderQueueEmpty(message) {
+  queueJobsNode.classList.add("empty");
+  queueJobsNode.innerHTML = `<p>${escapeHtml(message)}</p>`;
+}
+
+function formatQueueStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalized === "processing") {
+    return "Processing";
+  }
+
+  if (normalized === "completed") {
+    return "Completed";
+  }
+
+  if (normalized === "failed") {
+    return "Failed";
+  }
+
+  return "Queued";
+}
+
+function getQueueJobSnippet(job) {
+  if (job.contentMode === POST_MODE) {
+    return job.sourceTitle || job.sourcePreview || "Queued post rewrite";
+  }
+
+  return job.sourcePreview || job.sourceLink || "Queued comment generation";
+}
+
+function renderQueueJobs(jobs) {
+  const normalizedJobs = Array.isArray(jobs) ? jobs : [];
+
+  if (!normalizedJobs.length) {
+    renderQueueEmpty("No queued jobs yet. Add links or posts to the queue and keep moving.");
+    return;
+  }
+
+  queueJobsNode.classList.remove("empty");
+  queueJobsNode.innerHTML = "";
+
+  normalizedJobs.forEach((job) => {
+    const card = document.createElement("article");
+    card.className = "history-card queue-job-card";
+    const personaLabel = job.generationMode === "all-personas"
+      ? "All personas"
+      : job.personaName || getPersonaLabel(job.personaId || "alex-moreno");
+    const snippet = getQueueJobSnippet(job);
+    const sourceLine = job.sourceLink
+      ? `<a class="source-link" href="${escapeHtml(job.sourceLink)}" target="_blank" rel="noreferrer">Open source</a>`
+      : "";
+
+    card.innerHTML = `
+      <div class="history-meta">
+        <span class="history-tag queue-status queue-status-${escapeHtml(job.status)}">${escapeHtml(formatQueueStatus(job.status))}</span>
+        <span class="history-tag">${escapeHtml(job.contentMode === POST_MODE ? "Посты" : "Комментарии")}</span>
+        <span class="history-tag">${escapeHtml(personaLabel)}</span>
+        <span class="history-tag">${escapeHtml(formatDate(job.createdAt))}</span>
+        ${job.targetKeyword ? `<span class="history-tag">${escapeHtml(job.targetKeyword)}</span>` : ""}
+        ${job.savedItemsCount ? `<span class="history-tag">${escapeHtml(`${job.savedItemsCount} saved`)}</span>` : ""}
+      </div>
+      <p class="history-snippet">${escapeHtml(snippet)}</p>
+      ${sourceLine ? `<div class="queue-source-link">${sourceLine}</div>` : ""}
+      ${job.errorMessage ? `<p class="queue-error">${escapeHtml(job.errorMessage)}</p>` : ""}
+      <div class="history-actions queue-actions">
+        ${job.status === "completed" ? '<button type="button" class="ghost open-saved-button">Open saved</button>' : ""}
+      </div>
+    `;
+
+    const openSavedButton = card.querySelector(".open-saved-button");
+    if (openSavedButton) {
+      openSavedButton.addEventListener("click", () => {
+        setContentMode(SAVED_MODE);
+      });
+    }
+
+    queueJobsNode.append(card);
+  });
+}
+
 function renderSavedEmpty(message) {
   savedTableWrap.classList.add("empty");
   savedTableWrap.innerHTML = `<p>${escapeHtml(message)}</p>`;
@@ -571,10 +685,14 @@ function buildSavedOutputMarkup(item) {
   const titleMarkup = item.outputTitle
     ? `<div class="saved-output-title">${escapeHtml(item.outputTitle)}</div>`
     : "";
+  const buttonLabel = item.contentMode === POST_MODE ? "Скопировать пост" : "Скопировать комментарий";
 
   return `
     ${titleMarkup}
     <div class="saved-output-text">${escapeHtml(item.outputText || "")}</div>
+    <div class="saved-output-actions">
+      <button type="button" class="ghost saved-copy-button" data-saved-id="${escapeHtml(item.id)}">${escapeHtml(buttonLabel)}</button>
+    </div>
   `;
 }
 
@@ -661,6 +779,31 @@ function renderSavedTable(items) {
 
     select.dataset.currentValue = select.value;
   });
+
+  savedTableWrap.querySelectorAll(".saved-copy-button").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      const target = event.currentTarget;
+      const row = target.closest("tr");
+      const savedId = row?.dataset.savedId || target.dataset.savedId;
+      const item = normalizedItems.find((candidate) => candidate.id === savedId);
+
+      if (!item) {
+        setStatus("Не удалось найти текст для копирования.");
+        return;
+      }
+
+      try {
+        const textToCopy = item.contentMode === POST_MODE
+          ? `${item.outputTitle || ""}\n\n${item.outputText || ""}`.trim()
+          : String(item.outputText || "");
+        await copyText(textToCopy);
+        flashCopied(target, "Скопировано");
+        setStatus(item.contentMode === POST_MODE ? "Пост скопирован." : "Комментарий скопирован.");
+      } catch (error) {
+        setStatus(error.message || "Копирование не сработало.");
+      }
+    });
+  });
 }
 
 async function loadSavedItems(options = {}) {
@@ -692,6 +835,67 @@ async function loadSavedItems(options = {}) {
       setStatus("Не удалось загрузить сохраненные записи.");
     }
   }
+}
+
+async function loadQueueJobs(options = {}) {
+  const silentStatus = Boolean(options.silentStatus);
+
+  try {
+    const response = await fetch("/api/queue?limit=24", {
+      headers: getAccessToken() ? { "x-app-access-token": getAccessToken() } : {},
+    });
+    const data = await readJsonResponse(response);
+
+    if (!response.ok) {
+      throw new Error(data?.error || "Could not load queue.");
+    }
+
+    renderQueueJobs(data?.jobs || []);
+    if (!silentStatus) {
+      setStatus("Queue updated.");
+    }
+  } catch (error) {
+    renderQueueEmpty(error.message || "Could not load queue.");
+    if (!silentStatus) {
+      setStatus("Queue failed to load.");
+    }
+  }
+}
+
+async function enqueueGeneration(generationMode) {
+  const payload = collectPayload(generationMode);
+
+  try {
+    const response = await fetch("/api/generate-async", {
+      method: "POST",
+      headers: buildJsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await readJsonResponse(response);
+
+    if (!response.ok) {
+      throw new Error(data?.error || "Could not add generation to queue.");
+    }
+
+    await loadQueueJobs({ silentStatus: true });
+    setStatus(
+      generationMode === "all-personas"
+        ? "Added all 10 personas to the background queue."
+        : "Added to the background queue.",
+    );
+  } catch (error) {
+    setStatus(error.message || "Could not add generation to queue.");
+  }
+}
+
+function startQueuePolling() {
+  if (queuePollTimer) {
+    window.clearInterval(queuePollTimer);
+  }
+
+  queuePollTimer = window.setInterval(() => {
+    loadQueueJobs({ silentStatus: true });
+  }, QUEUE_POLL_INTERVAL_MS);
 }
 
 async function readJsonResponse(response) {
@@ -755,24 +959,24 @@ refreshSavedButton.addEventListener("click", () => {
   loadSavedItems();
 });
 
+refreshQueueButton.addEventListener("click", () => {
+  loadQueueJobs();
+});
+
+queueButton.addEventListener("click", () => {
+  enqueueGeneration("single");
+});
+
+queueAllButton.addEventListener("click", () => {
+  enqueueGeneration("all-personas");
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const formData = new FormData(form);
-  const contentMode = getSafeContentMode(formData.get("contentMode"));
   const generationMode = event.submitter?.value === "all-personas" ? "all-personas" : "single";
-  const payload = {
-    contentMode,
-    postText: formData.get("postText"),
-    redditUrl: formData.get("redditUrl"),
-    targetKeyword: formData.get("targetKeyword"),
-    sourceTitle: formData.get("sourceTitle"),
-    sourcePost: formData.get("sourcePost"),
-    personaId: formData.get("personaId"),
-    promoCreditClub: contentMode === COMMENT_MODE && formData.get("promoCreditClub") === "on",
-    promoCreditBooster: contentMode === COMMENT_MODE && formData.get("promoCreditBooster") === "on",
-    generateAllPersonas: generationMode === "all-personas",
-  };
+  const payload = collectPayload(generationMode);
+  const contentMode = payload.contentMode;
   const hasRedditUrl = contentMode === COMMENT_MODE && String(payload.redditUrl || "").trim().length > 0;
   const modeConfig = getModeConfig(contentMode);
 
@@ -868,3 +1072,5 @@ form.addEventListener("submit", async (event) => {
 
 renderHistory();
 setContentMode(contentModeInput.value, { resetOutput: true });
+loadQueueJobs({ silentStatus: true });
+startQueuePolling();

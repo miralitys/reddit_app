@@ -8,6 +8,7 @@ Local-first Node.js web app for generating credit-focused Reddit comments and pe
 - Generates a full batch of 10 comments, one per persona
 - Supports a `Комментарии` mode for replies and a `Посты` mode for post rewrites
 - Includes a `Сохраненные` mode with server-side saved outputs shared across devices
+- Supports background queueing so you can add generation jobs without waiting on the page
 - Accepts either pasted text or a Reddit post URL in comment mode
 - Pulls Reddit title, body, attached image context, and visible text from images when possible
 - Rewrites posts in persona voice while keeping the original title unchanged in post mode
@@ -60,6 +61,7 @@ Key deployment notes:
 - `RATE_LIMIT_MAX_REQUESTS`
 - `REQUEST_BODY_LIMIT`
 - `SAVED_GENERATIONS_FILE`
+- `GENERATION_QUEUE_FILE`
 
 ## App Modes
 
@@ -87,6 +89,13 @@ Key deployment notes:
 - Includes filters by persona and status
 - Lets you mark each row as `new` or `published`
 
+### Background Queue
+
+- Add comment or post jobs to a background queue instead of waiting for the page
+- Queue jobs continue processing on the server
+- Completed jobs land in `Сохраненные`
+- Failed jobs stay visible in the queue with an error message
+
 ## Stack
 
 - Node.js
@@ -107,6 +116,8 @@ npm test
 
 - The app is local-first by default
 - Shared saved outputs are written to `SAVED_GENERATIONS_FILE`
+- Background queue state is written to `GENERATION_QUEUE_FILE`
 - On Render, use a persistent disk for `SAVED_GENERATIONS_FILE` if you want saved records to survive deploys and restarts
+- On Render, point both `SAVED_GENERATIONS_FILE` and `GENERATION_QUEUE_FILE` into your persistent disk mount path if you want queue and saved records to survive deploys and restarts
 - `.env` is not committed
 - The API key should stay only in local environment files and never be pasted into GitHub

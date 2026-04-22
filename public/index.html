@@ -191,6 +191,10 @@
                 <button id="submit-all-button" type="submit" value="all-personas" class="ghost">
                   Generate all 10 personas
                 </button>
+                <button id="queue-button" type="button" class="ghost">Add comment to queue</button>
+                <button id="queue-all-button" type="button" class="ghost">
+                  Queue all 10 personas
+                </button>
               </div>
               <p id="status" class="status" aria-live="polite"></p>
             </div>
@@ -221,6 +225,19 @@
         </div>
         <div id="history" class="history empty">
           <p>Your latest comment and post generations will appear here.</p>
+        </div>
+      </section>
+
+      <section id="queue-panel" class="panel queue-panel">
+        <div class="section-head output-head">
+          <div>
+            <p class="section-kicker">Background queue</p>
+            <h2>Queued generations</h2>
+          </div>
+          <button id="refresh-queue-button" type="button" class="ghost">Refresh queue</button>
+        </div>
+        <div id="queue-jobs" class="history empty">
+          <p>Your queued jobs will appear here. Add links or posts to the queue and keep working.</p>
         </div>
       </section>
       </div>
